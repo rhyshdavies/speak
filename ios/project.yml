@@ -1,0 +1,38 @@
+name: Speak
+options:
+  bundleIdPrefix: com.speak
+  deploymentTarget:
+    iOS: "16.0"
+  xcodeVersion: "15.0"
+  generateEmptyDirectories: true
+
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    TARGETED_DEVICE_FAMILY: "1"  # iPhone only
+    INFOPLIST_FILE: Speak/Info.plist
+    DEVELOPMENT_TEAM: ""
+
+targets:
+  Speak:
+    type: application
+    platform: iOS
+    sources:
+      - path: Speak
+        excludes:
+          - "**/.DS_Store"
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.speak.app
+        INFOPLIST_FILE: Speak/Info.plist
+        GENERATE_INFOPLIST_FILE: false
+    info:
+      path: Speak/Info.plist
+      properties:
+        CFBundleDisplayName: Speak
+        CFBundleShortVersionString: "1.0"
+        CFBundleVersion: "1"
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        NSMicrophoneUsageDescription: "Speak needs microphone access to practice Spanish conversations with you."

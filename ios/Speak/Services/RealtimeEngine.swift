@@ -11,8 +11,9 @@ protocol RealtimeEngineDelegate: AnyObject {
 }
 
 /// WebSocket-based real-time conversation engine
-/// Uses Deepgram Flux STT → Gemini streaming → Cartesia TTS pipeline
-/// Target latency: sub-500ms (vs ~2.6s for REST-based beginner mode)
+/// Uses ElevenLabs Scribe STT → Groq Llama 3.3 70B → Cartesia TTS pipeline
+/// Features: Sentence-level TTS streaming, streaming audio playback, event-driven connection
+/// Target latency: sub-300ms (vs ~2.6s for REST-based beginner mode)
 final class RealtimeEngine: NSObject, ConversationEngine {
     // MARK: - Properties
 
@@ -24,19 +25,28 @@ final class RealtimeEngine: NSObject, ConversationEngine {
     private var scenario: ScenarioContext?
     private var cefrLevel: CEFRLevel = .a1
 
-    // Audio streaming
+    // Audio streaming (mic input)
     private var audioEngine: AVAudioEngine?
     private var isStreaming = false
     private var isTTSPlaying = false  // Pause mic input during TTS to prevent echo
+
+    // Streaming audio playback (TTS output)
+    private var playbackEngine: AVAudioEngine?
+    private var playerNode: AVAudioPlayerNode?
+    private let playbackFormat = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: 24000, channels: 1, interleaved: true)!
+    private var pendingBufferCount = 0  // Track how many buffers are queued for playback
 
     // Response accumulation
     private var currentTranscript = ""
     private var tutorSpanishText = ""
     private var tutorEnglishText = ""
     private var suggestedResponses: [String]? = nil
-    private var audioChunks: [Data] = []
+    private var audioChunks: [Data] = []  // Still accumulate for final response
     private var responseCompletion: ((Result<TurnResponse, Error>) -> Void)?
     private var isWaitingForResponse = false
+
+    // Connection state for event-driven setup
+    private var connectionContinuation: CheckedContinuation<Void, Error>?
 
     // MARK: - Initialization
 
@@ -66,28 +76,26 @@ final class RealtimeEngine: NSObject, ConversationEngine {
         webSocket?.resume()
         print("[RealtimeEngine] WebSocket resumed")
 
-        // Wait for connection
+        // Start listening for messages immediately so we can receive 'ready'
+        startListening()
+
+        // Wait for connection using event-driven approach (no fixed delay!)
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            // Send setup message after a brief delay to ensure connection is open
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-                self?.sendSetup { result in
-                    switch result {
-                    case .success:
-                        self?.isConnected = true
-                        continuation.resume()
-                    case .failure(let error):
-                        continuation.resume(throwing: error)
-                    }
+            self.connectionContinuation = continuation
+
+            // Timeout after 10 seconds
+            DispatchQueue.main.asyncAfter(deadline: .now() + 10) { [weak self] in
+                if let cont = self?.connectionContinuation {
+                    self?.connectionContinuation = nil
+                    cont.resume(throwing: ConversationEngineError.networkError(URLError(.timedOut)))
                 }
             }
         }
-
-        // Start listening for messages
-        startListening()
     }
 
     func disconnect() {
         stopStreaming()
+        stopPlaybackEngine()
         webSocket?.cancel(with: .goingAway, reason: nil)
         isConnected = false
     }
@@ -140,6 +148,7 @@ final class RealtimeEngine: NSObject, ConversationEngine {
         tutorEnglishText = ""
         suggestedResponses = nil
         audioChunks = []
+        pendingBufferCount = 0
     }
 
     /// Stop streaming audio
@@ -328,6 +337,12 @@ final class RealtimeEngine: NSObject, ConversationEngine {
         switch type {
         case "ready":
             print("[RealtimeEngine] Server ready")
+            // Resume connection continuation - server is ready!
+            isConnected = true
+            if let cont = connectionContinuation {
+                connectionContinuation = nil
+                cont.resume()
+            }
 
         case "transcript":
             // Interim or final transcript from Deepgram
@@ -359,11 +374,13 @@ final class RealtimeEngine: NSObject, ConversationEngine {
             }
 
         case "audio":
-            // Base64 audio chunk from Cartesia - pause mic to prevent echo
+            // Base64 audio chunk from Cartesia - play immediately!
             isTTSPlaying = true
             if let base64Data = json["data"] as? String,
                let audioData = Data(base64Encoded: base64Data) {
-                audioChunks.append(audioData)
+                audioChunks.append(audioData)  // Still accumulate for final response
+                // Play chunk immediately for streaming playback
+                playAudioChunk(audioData)
                 DispatchQueue.main.async { [weak self] in
                     guard let self = self else { return }
                     self.delegate?.realtimeEngine(self, didReceiveAudioData: audioData)
@@ -402,12 +419,12 @@ final class RealtimeEngine: NSObject, ConversationEngine {
     }
 
     private func finalizeResponse() {
-        // Combine audio chunks
+        // Combine audio chunks (for response metadata - audio was already streamed)
         var combinedAudio = Data()
         for chunk in audioChunks {
             combinedAudio.append(chunk)
         }
-        print("[RealtimeEngine] Finalizing response: \(audioChunks.count) chunks, \(combinedAudio.count) bytes total")
+        print("[RealtimeEngine] Finalizing response: \(audioChunks.count) chunks, \(combinedAudio.count) bytes total, \(pendingBufferCount) buffers still playing")
 
         // Check if we have any meaningful content
         let hasAudio = !combinedAudio.isEmpty
@@ -421,10 +438,20 @@ final class RealtimeEngine: NSObject, ConversationEngine {
             tutorEnglishText = ""
             suggestedResponses = nil
             audioChunks = []
+            // If no audio was streamed, resume mic immediately
+            if pendingBufferCount == 0 {
+                resumeAfterPlayback()
+            }
             return
         }
 
-        // Convert PCM to WAV format for playback
+        // If no audio was received, resume mic immediately
+        if !hasAudio && pendingBufferCount == 0 {
+            resumeAfterPlayback()
+        }
+        // Otherwise, resumeAfterPlayback will be called when last audio buffer finishes
+
+        // Convert PCM to WAV format for response metadata (not for playback - already streamed)
         let audioData = hasAudio ? createWAVFromPCM(combinedAudio, sampleRate: 24000, channels: 1) : Data()
         print("[RealtimeEngine] Created WAV: \(audioData.count) bytes")
         let audioBase64 = audioData.base64EncodedString()
@@ -465,6 +492,76 @@ final class RealtimeEngine: NSObject, ConversationEngine {
         tutorEnglishText = ""
         suggestedResponses = nil
         audioChunks = []
+    }
+
+    // MARK: - Streaming Audio Playback
+
+    /// Setup playback engine for streaming TTS audio
+    private func setupPlaybackEngine() {
+        guard playbackEngine == nil else { return }
+
+        playbackEngine = AVAudioEngine()
+        playerNode = AVAudioPlayerNode()
+
+        guard let engine = playbackEngine, let player = playerNode else { return }
+
+        engine.attach(player)
+        engine.connect(player, to: engine.mainMixerNode, format: playbackFormat)
+
+        do {
+            try engine.start()
+            player.play()
+            print("[RealtimeEngine] Playback engine started")
+        } catch {
+            print("[RealtimeEngine] Failed to start playback engine: \(error)")
+        }
+    }
+
+    /// Play an audio chunk immediately (streaming playback)
+    private func playAudioChunk(_ data: Data) {
+        setupPlaybackEngine()
+
+        guard let player = playerNode, let engine = playbackEngine, engine.isRunning else {
+            print("[RealtimeEngine] Playback engine not ready")
+            return
+        }
+
+        // Convert Data to AVAudioPCMBuffer
+        let frameCount = UInt32(data.count / 2)  // 2 bytes per Int16 sample
+        guard let buffer = AVAudioPCMBuffer(pcmFormat: playbackFormat, frameCapacity: frameCount) else {
+            print("[RealtimeEngine] Failed to create audio buffer")
+            return
+        }
+        buffer.frameLength = frameCount
+
+        // Copy data into buffer
+        data.withUnsafeBytes { rawBuffer in
+            if let src = rawBuffer.baseAddress {
+                memcpy(buffer.int16ChannelData![0], src, data.count)
+            }
+        }
+
+        // Track pending buffers
+        pendingBufferCount += 1
+
+        // Schedule buffer for immediate playback with completion handler
+        player.scheduleBuffer(buffer) { [weak self] in
+            DispatchQueue.main.async {
+                self?.pendingBufferCount -= 1
+                // When last buffer finishes, resume mic input
+                if self?.pendingBufferCount == 0 {
+                    self?.resumeAfterPlayback()
+                }
+            }
+        }
+    }
+
+    /// Stop playback engine
+    private func stopPlaybackEngine() {
+        playerNode?.stop()
+        playbackEngine?.stop()
+        playbackEngine = nil
+        playerNode = nil
     }
 
     // MARK: - Audio Conversion
@@ -517,7 +614,21 @@ extension RealtimeEngine: URLSessionWebSocketDelegate {
         webSocketTask: URLSessionWebSocketTask,
         didOpenWithProtocol protocol: String?
     ) {
-        print("[RealtimeEngine] WebSocket connected")
+        print("[RealtimeEngine] WebSocket connected - sending setup immediately")
+        // Send setup message immediately when connection opens (no delay!)
+        sendSetup { [weak self] result in
+            switch result {
+            case .success:
+                print("[RealtimeEngine] Setup sent, waiting for 'ready' from server")
+                // Don't resume continuation here - wait for 'ready' message
+            case .failure(let error):
+                print("[RealtimeEngine] Setup failed: \(error)")
+                if let cont = self?.connectionContinuation {
+                    self?.connectionContinuation = nil
+                    cont.resume(throwing: error)
+                }
+            }
+        }
     }
 
     func urlSession(
@@ -528,5 +639,10 @@ extension RealtimeEngine: URLSessionWebSocketDelegate {
     ) {
         print("[RealtimeEngine] WebSocket closed: \(closeCode)")
         isConnected = false
+        // If we were waiting for connection, fail it
+        if let cont = connectionContinuation {
+            connectionContinuation = nil
+            cont.resume(throwing: ConversationEngineError.networkError(URLError(.networkConnectionLost)))
+        }
     }
 }

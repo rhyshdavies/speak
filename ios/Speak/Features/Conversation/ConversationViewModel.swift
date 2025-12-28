@@ -424,28 +424,9 @@ extension ConversationViewModel: RealtimeEngineDelegate {
             scenarioProgress = response.tutorResponse.scenarioProgress
             vocabularySpotlight = response.tutorResponse.vocabularySpotlight
 
-            // Play audio response
-            if let audioData = response.audioData {
-                do {
-                    try audioPlayer.play(data: audioData) { [weak self] in
-                        // Audio finished playing - tell server to resume listening
-                        if let realtimeEngine = self?.conversationEngine as? RealtimeEngine {
-                            realtimeEngine.sendResume()
-                        }
-                    }
-                } catch {
-                    print("[ConversationVM] Failed to play audio: \(error)")
-                    // Still send resume even if playback failed
-                    if let realtimeEngine = conversationEngine as? RealtimeEngine {
-                        realtimeEngine.sendResume()
-                    }
-                }
-            } else {
-                // No audio, still need to resume
-                if let realtimeEngine = conversationEngine as? RealtimeEngine {
-                    realtimeEngine.sendResume()
-                }
-            }
+            // NOTE: Audio was already played via streaming (AVAudioPlayerNode) in RealtimeEngine.
+            // The RealtimeEngine automatically calls resumeAfterPlayback() when all audio buffers finish.
+            // No need to do anything here for audio playback.
 
             HapticManager.success()
         }

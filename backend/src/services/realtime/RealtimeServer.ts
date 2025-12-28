@@ -1,11 +1,11 @@
 import { WebSocket, WebSocketServer } from 'ws';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import Groq from 'groq-sdk';
 import { buildSystemPrompt } from '../../prompts/system-prompts.js';
 import type { ScenarioContext, CEFRLevel } from '../../types/index.js';
 
 // Configuration
 const ELEVENLABS_API_KEY = process.env.ELEVEN_LABS_API_KEY!;
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY!;
+const GROQ_API_KEY = process.env.GROQ_API_KEY!;
 const CARTESIA_API_KEY = process.env.CARTESIA_API_KEY!;
 
 // Spanish voice for Cartesia Sonic-3
@@ -28,15 +28,17 @@ interface ClientMessage {
 
 export class RealtimeServer {
   private wss: WebSocketServer;
-  private genAI: GoogleGenerativeAI;
+  private groq: Groq;
 
   constructor(port: number = 8080) {
-    this.wss = new WebSocketServer({ port });
-    this.genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+    // Bind to 0.0.0.0 for IPv4 (required for iOS devices)
+    this.wss = new WebSocketServer({ port, host: '0.0.0.0' });
+    this.groq = new Groq({ apiKey: GROQ_API_KEY });
     this.setupServer();
     console.log(`🚀 Realtime WebSocket Server running on port ${port}`);
     console.log(`   Advanced Mode: Real-time streaming enabled`);
     console.log(`   STT: ElevenLabs Scribe v2 Realtime`);
+    console.log(`   LLM: Groq Llama 3.3 70B`);
   }
 
   private setupServer() {
@@ -55,6 +57,8 @@ export class RealtimeServer {
       // Cartesia TTS WebSocket
       let cartesiaSocket: WebSocket | null = null;
       let cartesiaContextId = `ctx-${Date.now()}`;
+      let ttsStartTime: number | null = null;
+      let firstTTSChunkTime: number | null = null;
 
       // ElevenLabs Scribe WebSocket
       let scribeSocket: WebSocket | null = null;
@@ -74,9 +78,6 @@ export class RealtimeServer {
           console.log('[Realtime] Cartesia TTS connected');
         });
 
-        let firstTTSChunkTime: number | null = null;
-        let ttsStartTime: number | null = null;
-
         cartesiaSocket.on('message', (data: Buffer) => {
           try {
             const response = JSON.parse(data.toString());
@@ -93,17 +94,32 @@ export class RealtimeServer {
                 })
               );
             } else if (response.type === 'done') {
-              console.log('[Realtime] Cartesia done, sending audio_done to client');
-              clientSocket.send(JSON.stringify({ type: 'audio_done' }));
+              pendingContexts--;
+              console.log(`[Realtime] TTS context done, ${pendingContexts} remaining`);
 
-              // Resume STT after TTS finishes (prevents hearing itself)
-              state.isPaused = false;
-              console.log('[Realtime] Resumed (TTS complete)');
+              // Only signal complete when ALL contexts are done
+              if (pendingContexts <= 0) {
+                pendingContexts = 0;
+                if (ttsStartTime) {
+                  const ttsTotalTime = Date.now() - ttsStartTime;
+                  console.log(`[Realtime] ⏱️ TTS total time: ${ttsTotalTime}ms`);
+                }
+                console.log('[Realtime] All TTS done, sending audio_done to client');
+                clientSocket.send(JSON.stringify({ type: 'audio_done' }));
 
-              // Reconnect Scribe if it disconnected during TTS
-              if (!scribeSocket || scribeSocket.readyState !== WebSocket.OPEN) {
-                console.log('[Realtime] Scribe disconnected, reconnecting...');
-                connectScribe();
+                // Reset TTS timing for next turn
+                ttsStartTime = null;
+                firstTTSChunkTime = null;
+
+                // Resume STT after TTS finishes (prevents hearing itself)
+                state.isPaused = false;
+                console.log('[Realtime] Resumed (TTS complete)');
+
+                // Reconnect Scribe if it disconnected during TTS
+                if (!scribeSocket || scribeSocket.readyState !== WebSocket.OPEN) {
+                  console.log('[Realtime] Scribe disconnected, reconnecting...');
+                  connectScribe();
+                }
               }
             } else if (response.type === 'error') {
               console.error('[Realtime] Cartesia error response:', response);
@@ -124,14 +140,24 @@ export class RealtimeServer {
         });
       };
 
-      const sendToCartesia = (text: string, isContinue: boolean = true) => {
-        if (!cartesiaSocket || cartesiaSocket.readyState !== WebSocket.OPEN) {
+      let pendingContexts = 0;  // Track how many TTS contexts are in flight
+
+      const sendToCartesia = (text: string) => {
+        if (!cartesiaSocket || cartesiaSocket.readyState !== WebSocket.OPEN || !text.trim()) {
           return;
         }
-        console.log(`[Realtime] Sending to Cartesia: "${text.substring(0, 50)}..." continue=${isContinue}`);
+        // Track TTS start time for first chunk latency
+        if (!ttsStartTime) {
+          ttsStartTime = Date.now();
+        }
+
+        // Each sentence gets unique context ID - plays immediately without blocking
+        const contextId = `ctx-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+        pendingContexts++;
+        console.log(`[Realtime] TTS[${pendingContexts}]: "${text.substring(0, 40)}..." ctx=${contextId.substring(4, 15)}`);
 
         const payload = {
-          model_id: 'sonic-2024-10-19',
+          model_id: 'sonic-3',
           transcript: text,
           voice: {
             mode: 'id',
@@ -143,207 +169,188 @@ export class RealtimeServer {
             encoding: 'pcm_s16le',
             sample_rate: 24000,
           },
-          context_id: cartesiaContextId,
-          continue: isContinue,
+          context_id: contextId,
+          continue: false,  // Each sentence is complete - play immediately
         };
         cartesiaSocket.send(JSON.stringify(payload));
       };
 
-      // Gemini LLM
-      const processWithGemini = async (transcript: string) => {
+      // Groq LLM (Llama 3.3 70B)
+      const processWithLLM = async (transcript: string) => {
         if (state.isPaused || !state.scenario) return;
 
         const startTime = Date.now();
         console.log(`[Realtime] User said: "${transcript}" (processing started)`);
-
-        state.conversationHistory.push({ role: 'user', content: transcript });
+        console.log(`[Realtime] Conversation history has ${state.conversationHistory.length} messages`);
 
         const systemPrompt = buildSystemPrompt(state.scenario, state.cefrLevel);
 
-        const model = this.genAI.getGenerativeModel({
-          model: 'gemini-2.0-flash-exp',
-          generationConfig: {
-            responseMimeType: 'application/json',
-          },
-        });
+        // Build messages for Groq (OpenAI-compatible format)
+        const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
+          { role: 'system', content: systemPrompt },
+          ...state.conversationHistory.map((m) => ({
+            role: (m.role === 'user' ? 'user' : 'assistant') as 'user' | 'assistant',
+            content: m.content,
+          })),
+          { role: 'user', content: transcript },
+        ];
 
-        const chat = model.startChat({
-          history: [
-            {
-              role: 'user',
-              parts: [{ text: systemPrompt }],
-            },
-            {
-              role: 'model',
-              parts: [
-                {
-                  text: 'Entendido. Responderé en JSON válido como tutor de español.',
-                },
-              ],
-            },
-            ...state.conversationHistory.map((m) => ({
-              role: m.role === 'user' ? 'user' : ('model' as const),
-              parts: [{ text: m.content }],
-            })),
-          ],
-        });
+        // Add user message to history
+        state.conversationHistory.push({ role: 'user', content: transcript });
 
         try {
           cartesiaContextId = `ctx-${Date.now()}`;
           state.isPaused = true;
           console.log('[Realtime] Paused STT (generating response)');
 
-          const result = await chat.sendMessageStream(transcript);
-          let fullResponse = '';
-          let jsonBuffer = '';
+          const stream = await this.groq.chat.completions.create({
+            model: 'llama-3.3-70b-versatile',
+            messages,
+            temperature: 0.7,
+            max_completion_tokens: 1024,
+            stream: true,
+          });
 
-          for await (const chunk of result.stream) {
-            const chunkText = chunk.text();
-            if (chunkText) {
-              jsonBuffer += chunkText;
+          let fullResponse = '';  // Spanish text (before |||)
+          let jsonBuffer = '';    // JSON metadata (after |||)
+          let hitDelimiter = false;
+          let pendingText = '';   // Buffer for partial chunks
+          let sentenceCount = 0;
+          let chunkCount = 0;
+          let firstChunkTime: number | null = null;
+          const streamStartTime = Date.now();
 
-              // Match tutorSpanish including escaped characters
-              const spanishMatch = jsonBuffer.match(
-                /"tutorSpanish"\s*:\s*"((?:[^"\\]|\\.)*)"/
-              );
-              if (spanishMatch && spanishMatch[1] !== fullResponse) {
-                const newText = spanishMatch[1].slice(fullResponse.length);
-                if (newText) {
-                  fullResponse = spanishMatch[1];
-                  sendToCartesia(newText, true);
+          for await (const chunk of stream) {
+            const chunkText = chunk.choices[0]?.delta?.content || '';
+            if (!chunkText) continue;
 
-                  clientSocket.send(
-                    JSON.stringify({
-                      type: 'tutor_text',
-                      text: newText,
-                      fullText: fullResponse,
-                    })
-                  );
+            chunkCount++;
+            if (!firstChunkTime) {
+              firstChunkTime = Date.now();
+              console.log(`[Realtime] ⏱️ First Groq chunk at ${firstChunkTime - streamStartTime}ms: "${chunkText}"`);
+            }
+
+            // Log every 5th chunk to see streaming pattern
+            if (chunkCount % 5 === 0 || chunkText.length > 20) {
+              console.log(`[Realtime] Chunk #${chunkCount} at ${Date.now() - streamStartTime}ms: "${chunkText.substring(0, 30)}..."`);
+            }
+
+            if (!hitDelimiter) {
+              // Collect text, stream sentences to TTS as they complete
+              pendingText += chunkText;
+
+              // Check if we hit the delimiter
+              const delimiterIndex = pendingText.indexOf('|||');
+              if (delimiterIndex !== -1) {
+                // Send any remaining text before delimiter
+                const remaining = pendingText.substring(0, delimiterIndex).trim();
+                if (remaining) {
+                  fullResponse += remaining + ' ';
+                  sendToCartesia(remaining);
+                  clientSocket.send(JSON.stringify({
+                    type: 'tutor_text',
+                    text: remaining,
+                    fullText: fullResponse,
+                  }));
+                }
+                console.log(`[Realtime] Hit delimiter at ${Date.now() - streamStartTime}ms, full response: "${fullResponse.substring(0, 50)}..."`);
+                jsonBuffer = pendingText.substring(delimiterIndex + 3);
+                hitDelimiter = true;
+              } else {
+                // Stream complete sentences to TTS immediately
+                const sentenceMatch = pendingText.match(/^(.*?[.?!¿¡])\s*/);
+                if (sentenceMatch) {
+                  const sentence = sentenceMatch[1];
+                  fullResponse += sentence + ' ';
+                  sendToCartesia(sentence);
+                  sentenceCount++;
+                  console.log(`[Realtime] Streaming sentence ${sentenceCount} at ${Date.now() - streamStartTime}ms: "${sentence}"`);
+                  clientSocket.send(JSON.stringify({
+                    type: 'tutor_text',
+                    text: sentence,
+                    fullText: fullResponse,
+                  }));
+                  pendingText = pendingText.substring(sentenceMatch[0].length);
                 }
               }
-            }
-          }
-
-          if (fullResponse.length > 0) {
-            sendToCartesia('', false);
-          } else {
-            // No tutorSpanish found - check if there's plain text response
-            console.log('[Realtime] No JSON tutorSpanish found. Raw buffer:', jsonBuffer.substring(0, 500));
-
-            // Try to use raw text as response (Gemini sometimes returns plain text)
-            const cleanedText = jsonBuffer.trim()
-              .replace(/^["']|["']$/g, '')  // Remove surrounding quotes
-              .replace(/\\n/g, ' ')  // Replace newlines
-              .trim();
-
-            if (cleanedText.length > 5 && cleanedText.length < 500 && !cleanedText.includes('{')) {
-              // Use the plain text response
-              console.log('[Realtime] Using plain text response:', cleanedText);
-              fullResponse = cleanedText;
-              sendToCartesia(fullResponse, true);
-              sendToCartesia('', false);
-
-              // Create proper JSON structure with suggested responses
-              const plainTextResponse = {
-                tutorSpanish: fullResponse,
-                tutorEnglish: '',  // Will be empty for plain text responses
-                correctionSpanish: null,
-                correctionEnglish: null,
-                scenarioProgress: 'middle',
-                suggestedResponses: ['Sí', 'No', '¿Por qué?'],  // Generic suggestions
-              };
-              jsonBuffer = JSON.stringify(plainTextResponse);
-
-              clientSocket.send(
-                JSON.stringify({
-                  type: 'tutor_text',
-                  text: fullResponse,
-                  fullText: fullResponse,
-                })
-              );
-
-              // Send tutor_response with suggestedResponses for the UI
-              clientSocket.send(
-                JSON.stringify({
-                  type: 'tutor_response',
-                  response: plainTextResponse,
-                })
-              );
             } else {
-              // Generate fallback
-              const fallbackResponse = '¿Puedes decir más? No entendí bien.';
-              const fallbackEnglish = 'Can you say more? I did not understand well.';
-
-              sendToCartesia(fallbackResponse, true);
-              sendToCartesia('', false);
-
-              fullResponse = fallbackResponse;
-              jsonBuffer = JSON.stringify({
-                tutorSpanish: fallbackResponse,
-                tutorEnglish: fallbackEnglish,
-                correctionSpanish: null,
-                correctionEnglish: null,
-                scenarioProgress: 'middle',
-                suggestedResponses: ['Sí, claro', 'No, gracias', 'Otra vez, por favor'],
-              });
-
-              clientSocket.send(
-                JSON.stringify({
-                  type: 'tutor_text',
-                  text: fallbackResponse,
-                  fullText: fallbackResponse,
-                })
-              );
+              // After delimiter - collect JSON
+              jsonBuffer += chunkText;
             }
           }
 
-          let englishText = '';
-          try {
-            const parsed = JSON.parse(jsonBuffer);
-            state.conversationHistory.push({
-              role: 'assistant',
-              content: parsed.tutorSpanish || fullResponse,
-            });
-            englishText = parsed.tutorEnglish || '';
+          // Send any remaining pending text (partial sentence at end)
+          if (pendingText && pendingText.trim() && !hitDelimiter) {
+            fullResponse += pendingText;
+            sendToCartesia(pendingText);
+            clientSocket.send(JSON.stringify({
+              type: 'tutor_text',
+              text: pendingText,
+              fullText: fullResponse,
+            }));
+          }
 
-            clientSocket.send(
-              JSON.stringify({
-                type: 'tutor_response',
-                response: parsed,
-              })
-            );
+          // Fallback if no Spanish text was generated
+          if (fullResponse.trim().length === 0) {
+            const fallbackResponse = '¿Puedes repetir, por favor?';
+            fullResponse = fallbackResponse;
+            sendToCartesia(fallbackResponse);
+            jsonBuffer = '{"tutorEnglish":"Can you repeat, please?","correctionSpanish":null,"correctionEnglish":null,"suggestedResponses":["Sí","No","Otra vez"]}';
+            clientSocket.send(JSON.stringify({
+              type: 'tutor_text',
+              text: fallbackResponse,
+              fullText: fallbackResponse,
+            }));
+          }
+
+          // Add assistant response to history
+          state.conversationHistory.push({
+            role: 'assistant',
+            content: fullResponse,
+          });
+
+          // Parse JSON metadata
+          let englishText = '';
+          let response: any = {
+            tutorSpanish: fullResponse,
+            tutorEnglish: '',
+            correctionSpanish: null,
+            correctionEnglish: null,
+            suggestedResponses: ['Sí', 'No', '¿Por qué?'],
+          };
+
+          try {
+            const parsed = JSON.parse(jsonBuffer.trim());
+            englishText = parsed.tutorEnglish || '';
+            response = {
+              tutorSpanish: fullResponse,
+              tutorEnglish: englishText,
+              correctionSpanish: parsed.correctionSpanish || null,
+              correctionEnglish: parsed.correctionEnglish || null,
+              suggestedResponses: parsed.suggestedResponses || ['Sí', 'No', '¿Por qué?'],
+            };
             console.log(`[Realtime] Parsed JSON - English: "${englishText}"`);
           } catch (parseError) {
-            const englishMatch = jsonBuffer.match(/"tutorEnglish"\s*:\s*"((?:[^"\\]|\\.)*)"/);  // Handle escaped chars
+            // Try to extract English with regex
+            const englishMatch = jsonBuffer.match(/"tutorEnglish"\s*:\s*"((?:[^"\\]|\\.)*)"/);
             englishText = englishMatch ? englishMatch[1] : '';
-
+            response.tutorEnglish = englishText;
             console.log(`[Realtime] JSON parse failed, extracted English: "${englishText}"`);
-
-            state.conversationHistory.push({
-              role: 'assistant',
-              content: fullResponse,
-            });
-
-            clientSocket.send(
-              JSON.stringify({
-                type: 'tutor_response',
-                response: {
-                  tutorSpanish: fullResponse,
-                  tutorEnglish: englishText,
-                  correctionSpanish: null,
-                  correctionEnglish: null,
-                  scenarioProgress: 'middle',
-                  suggestedResponses: ['Sí', 'No', 'Repite, por favor'],
-                },
-              })
-            );
           }
 
+          // Send full response to client
+          clientSocket.send(JSON.stringify({
+            type: 'tutor_response',
+            response,
+          }));
+
           const totalTime = Date.now() - startTime;
-          console.log(`[Realtime] Tutor: "${fullResponse}" | English: "${englishText}"`);
-          console.log(`[Realtime] ⏱️ LLM processing time: ${totalTime}ms`);
+          const streamDuration = Date.now() - streamStartTime;
+          console.log(`[Realtime] Tutor: "${fullResponse.substring(0, 60)}..." | English: "${englishText.substring(0, 40)}..."`);
+          console.log(`[Realtime] ⏱️ Groq streaming: ${chunkCount} chunks over ${streamDuration}ms (first chunk at ${firstChunkTime ? firstChunkTime - streamStartTime : 'N/A'}ms)`);
+          console.log(`[Realtime] ⏱️ Total LLM time: ${totalTime}ms`);
         } catch (error) {
-          console.error('[Realtime] Gemini error:', error);
+          console.error('[Realtime] Groq error:', error);
           clientSocket.send(
             JSON.stringify({
               type: 'error',
@@ -371,10 +378,10 @@ export class RealtimeServer {
           language_code: 'es',
           audio_format: 'pcm_16000',
           commit_strategy: 'vad',
-          vad_silence_threshold_secs: '1.0',  // Commit after 1s of silence (balanced)
+          vad_silence_threshold_secs: '0.4',  // Commit after 0.4s of silence (faster)
           vad_threshold: '0.3',  // Slightly higher to avoid false triggers
           min_speech_duration_ms: '100',  // Require 100ms of speech
-          min_silence_duration_ms: '200',  // Need 200ms silence to end utterance
+          min_silence_duration_ms: '150',  // Need 150ms silence to end utterance
         });
 
         const scribeUrl = `wss://api.elevenlabs.io/v1/speech-to-text/realtime?${params.toString()}`;
@@ -418,8 +425,14 @@ export class RealtimeServer {
                 );
               }
             } else if (msgType === 'committed_transcript') {
-              const transcript = message.text || '';
+              let transcript = message.text || '';
               console.log(`[Realtime] Scribe committed: "${transcript}"`);
+
+              // If commit is empty but we had a partial, use the partial as fallback
+              if (transcript.trim().length === 0 && currentTranscript.trim().length > 0) {
+                console.log(`[Realtime] Using partial as fallback: "${currentTranscript}"`);
+                transcript = currentTranscript;
+              }
 
               if (transcript.trim().length > 0 && !state.isPaused) {
                 clientSocket.send(
@@ -431,7 +444,7 @@ export class RealtimeServer {
                   })
                 );
                 currentTranscript = '';
-                processWithGemini(transcript.trim());
+                processWithLLM(transcript.trim());
               }
             } else if (msgType === 'input_error' || msgType === 'error') {
               console.error('[Realtime] Scribe error:', message);

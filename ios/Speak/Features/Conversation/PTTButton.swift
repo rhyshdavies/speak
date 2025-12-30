@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Push-to-Talk button with Matrix cyberpunk styling
+/// Push-to-Talk button with visual feedback
 /// - Beginner Mode: Hold to talk, release to send
 /// - Advanced Mode: Tap to start/stop listening (continuous)
 struct PTTButton: View {
@@ -13,7 +13,6 @@ struct PTTButton: View {
     let onRelease: () -> Void
 
     @State private var isPressed = false
-    @State private var glowPulse = false
 
     private let buttonSize: CGFloat = 88
 
@@ -22,17 +21,23 @@ struct PTTButton: View {
 
     var body: some View {
         ZStack {
-            // Outer glow rings
+            // Outer pulse ring (when recording)
             if isRecording {
-                pulseRings
+                pulseRing
             }
 
-            // Hexagonal glow background
-            hexagonGlow
-                .opacity(isRecording ? 0.8 : 0.3)
-
-            // Main hexagonal button
-            hexagonButton
+            // Main button
+            Circle()
+                .fill(buttonColor)
+                .frame(width: buttonSize, height: buttonSize)
+                .overlay(buttonContent)
+                .scaleEffect(isPressed ? 0.95 : 1.0)
+                .shadow(
+                    color: shadowColor,
+                    radius: isRecording ? 16 : 8,
+                    y: 4
+                )
+                .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isPressed)
         }
         .gesture(isToggleMode ? nil : pttGesture)
         .onTapGesture {
@@ -44,83 +49,27 @@ struct PTTButton: View {
             }
         }
         .disabled(isLocked && !isRecording)
-        .opacity(isLocked && !isRecording ? 0.5 : 1.0)
-        .onAppear {
-            withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) {
-                glowPulse = true
-            }
-        }
+        .opacity(isLocked && !isRecording ? 0.6 : 1.0)
     }
 
-    // MARK: - Pulse Rings (Recording)
+    // MARK: - Pulse Ring
 
-    private var pulseRings: some View {
-        let pulseScale = 1.0 + CGFloat(audioLevel) * 0.3
-        return ZStack {
-            // Outer ring
-            Circle()
-                .stroke(Theme.Colors.recording.opacity(0.3), lineWidth: 2)
-                .frame(width: buttonSize * pulseScale + 48, height: buttonSize * pulseScale + 48)
-
-            // Middle ring
-            Circle()
-                .stroke(Theme.Colors.recording.opacity(0.5), lineWidth: 1)
-                .frame(width: buttonSize * pulseScale + 32, height: buttonSize * pulseScale + 32)
-
-            // Inner glow
-            Circle()
-                .fill(Theme.Colors.recordingPulse)
-                .frame(width: buttonSize * pulseScale + 16, height: buttonSize * pulseScale + 16)
-        }
-        .animation(.easeInOut(duration: 0.1), value: audioLevel)
-    }
-
-    // MARK: - Hexagon Glow Background
-
-    private var hexagonGlow: some View {
-        Circle()
-            .fill(
-                RadialGradient(
-                    colors: [
-                        glowColor.opacity(0.4),
-                        glowColor.opacity(0.1),
-                        .clear
-                    ],
-                    center: .center,
-                    startRadius: buttonSize * 0.3,
-                    endRadius: buttonSize * 0.8
-                )
+    private var pulseRing: some View {
+        let pulseScale = 1.0 + CGFloat(audioLevel) * 0.25
+        return Circle()
+            .fill(Theme.Colors.recordingPulse)
+            .frame(
+                width: buttonSize * pulseScale + 32,
+                height: buttonSize * pulseScale + 32
             )
-            .frame(width: buttonSize + 40, height: buttonSize + 40)
-            .scaleEffect(glowPulse ? 1.1 : 1.0)
+            .animation(.easeInOut(duration: 0.1), value: audioLevel)
     }
 
-    // MARK: - Hexagonal Button
+    // MARK: - Button Color
 
-    private var hexagonButton: some View {
-        ZStack {
-            // Background circle with border
-            Circle()
-                .fill(Theme.Colors.surface)
-                .frame(width: buttonSize, height: buttonSize)
-                .overlay(
-                    Circle()
-                        .stroke(buttonBorderColor, lineWidth: 2)
-                )
-                .shadow(color: glowColor, radius: isRecording ? 16 : 8, y: 0)
-
-            // Inner content
-            buttonContent
-        }
-        .scaleEffect(isPressed ? 0.92 : 1.0)
-        .animation(.spring(response: 0.2, dampingFraction: 0.6), value: isPressed)
-    }
-
-    // MARK: - Colors
-
-    private var buttonBorderColor: Color {
+    private var buttonColor: Color {
         if isProcessing {
-            return Theme.Colors.textTertiary
+            return Theme.Colors.surfaceSecondary
         } else if isRecording {
             return Theme.Colors.recording
         } else {
@@ -128,11 +77,15 @@ struct PTTButton: View {
         }
     }
 
-    private var glowColor: Color {
+    // MARK: - Shadow Color
+
+    private var shadowColor: Color {
         if isRecording {
-            return Theme.Colors.recording
+            return Theme.Colors.recording.opacity(0.3)
+        } else if isProcessing {
+            return Theme.Colors.textPrimary.opacity(0.1)
         } else {
-            return Theme.Colors.primary
+            return Theme.Colors.primary.opacity(0.3)
         }
     }
 
@@ -141,42 +94,32 @@ struct PTTButton: View {
     @ViewBuilder
     private var buttonContent: some View {
         if isProcessing {
-            VStack(spacing: 6) {
-                // Matrix-style loading
-                HStack(spacing: 4) {
-                    ForEach(0..<3, id: \.self) { i in
-                        Rectangle()
-                            .fill(Theme.Colors.primary)
-                            .frame(width: 4, height: 16)
-                            .opacity(Double(i + 1) * 0.3)
-                    }
-                }
+            VStack(spacing: 4) {
+                ProgressView()
+                    .progressViewStyle(CircularProgressViewStyle(tint: Theme.Colors.textSecondary))
+                    .scaleEffect(1.2)
 
-                Text("PROCESSING")
-                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                Text("Processing...")
+                    .font(Theme.Typography.caption2)
                     .foregroundColor(Theme.Colors.textSecondary)
             }
         } else {
-            VStack(spacing: 6) {
-                // Icon with glow
+            VStack(spacing: 4) {
                 Image(systemName: isRecording ? "waveform" : "mic.fill")
                     .font(.system(size: 28, weight: .medium))
-                    .foregroundColor(isRecording ? Theme.Colors.recording : Theme.Colors.primary)
-                    .shadow(color: glowColor.opacity(0.8), radius: 4, y: 0)
 
-                // Terminal-style label
-                Text(buttonLabel.uppercased())
-                    .font(.system(size: 9, weight: .bold, design: .monospaced))
-                    .foregroundColor(isRecording ? Theme.Colors.recording : Theme.Colors.primary)
+                Text(buttonLabel)
+                    .font(Theme.Typography.caption2)
             }
+            .foregroundColor(.white)
         }
     }
 
     private var buttonLabel: String {
         if isToggleMode {
-            return isRecording ? ">> STOP" : ">> START"
+            return isRecording ? "Tap to Stop" : "Tap to Talk"
         } else {
-            return isRecording ? "RELEASE" : "HOLD"
+            return isRecording ? "Release" : "Hold to Talk"
         }
     }
 
@@ -199,14 +142,14 @@ struct PTTButton: View {
 
 // MARK: - Preview
 
-#Preview("Matrix PTT Button") {
+#Preview("Beginner Mode") {
     ZStack {
         Theme.Colors.background
             .ignoresSafeArea()
 
-        VStack(spacing: 60) {
+        VStack(spacing: 40) {
             PTTButton(
-                mode: .advanced,
+                mode: .beginner,
                 isRecording: false,
                 isProcessing: false,
                 isLocked: false,
@@ -216,11 +159,11 @@ struct PTTButton: View {
             )
 
             PTTButton(
-                mode: .advanced,
+                mode: .beginner,
                 isRecording: true,
                 isProcessing: false,
                 isLocked: false,
-                audioLevel: 0.6,
+                audioLevel: 0.5,
                 onPress: {},
                 onRelease: {}
             )

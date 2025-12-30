@@ -54,24 +54,20 @@ struct ConversationView: View {
                     viewModel.cleanup()
                     dismiss()
                 } label: {
-                    Text("[X]")
-                        .font(.system(size: 14, weight: .bold, design: .monospaced))
-                        .foregroundColor(Theme.Colors.error)
+                    Image(systemName: "xmark")
+                        .font(.body.weight(.medium))
+                        .foregroundColor(Theme.Colors.textSecondary)
                         .frame(width: 32, height: 32)
                         .background(Theme.Colors.surfaceSecondary)
-                        .clipShape(RoundedRectangle(cornerRadius: Theme.CornerRadius.xs))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: Theme.CornerRadius.xs)
-                                .stroke(Theme.Colors.error.opacity(0.5), lineWidth: 1)
-                        )
+                        .clipShape(Circle())
                 }
             }
 
             ToolbarItem(placement: .principal) {
                 HStack(spacing: Theme.Spacing.sm) {
-                    Text("> \(scenario.title.uppercased())")
+                    Text(scenario.title)
                         .font(Theme.Typography.headline)
-                        .foregroundColor(Theme.Colors.primary)
+                        .foregroundColor(Theme.Colors.textPrimary)
 
                     if mode == .advanced && viewModel.conversationState == .active {
                         LiveBadge()
@@ -193,40 +189,31 @@ struct ConversationView: View {
     private var statusIndicator: some View {
         if viewModel.conversationState == .active && !viewModel.isLocked && viewModel.liveTranscript.isEmpty {
             HStack(spacing: Theme.Spacing.sm) {
-                // VAD indicator dot with glow
+                // VAD indicator dot
                 Circle()
                     .fill(viewModel.audioLevel > 0.1 ? Theme.Colors.success : Theme.Colors.textTertiary)
                     .frame(width: 8, height: 8)
-                    .shadow(color: viewModel.audioLevel > 0.1 ? Theme.Colors.glowGreen : .clear, radius: 4, y: 0)
                     .animation(.easeInOut(duration: 0.15), value: viewModel.audioLevel)
 
-                Text(">> LISTENING_")
+                Text("Listening...")
                     .font(Theme.Typography.caption)
-                    .foregroundColor(Theme.Colors.primary)
+                    .foregroundColor(Theme.Colors.textSecondary)
             }
             .padding(Theme.Spacing.sm)
             .padding(.horizontal, Theme.Spacing.sm)
             .background(Theme.Colors.surfaceSecondary)
-            .overlay(
-                Capsule()
-                    .stroke(Theme.Colors.primary.opacity(0.3), lineWidth: 1)
-            )
             .clipShape(Capsule())
         } else if viewModel.conversationState == .paused {
             HStack(spacing: Theme.Spacing.sm) {
-                Text("||")
-                    .font(.system(size: 10, weight: .bold, design: .monospaced))
-                Text("PAUSED")
+                Image(systemName: "pause.fill")
+                    .font(.caption)
+                Text("Paused")
                     .font(Theme.Typography.caption)
             }
-            .foregroundColor(Theme.Colors.warning)
+            .foregroundColor(Theme.Colors.textSecondary)
             .padding(Theme.Spacing.sm)
             .padding(.horizontal, Theme.Spacing.sm)
             .background(Theme.Colors.surfaceSecondary)
-            .overlay(
-                Capsule()
-                    .stroke(Theme.Colors.warning.opacity(0.3), lineWidth: 1)
-            )
             .clipShape(Capsule())
         }
     }
@@ -236,23 +223,15 @@ struct ConversationView: View {
     private var liveTranscriptLine: some View {
         HStack {
             Spacer()
-            HStack(spacing: Theme.Spacing.xs) {
-                Text(">")
-                    .foregroundColor(Theme.Colors.secondary)
-                Text(viewModel.liveTranscript)
-                    .foregroundColor(Theme.Colors.textSecondary)
-                TerminalCursor()
-            }
-            .font(Theme.Typography.subheadline)
-            .lineLimit(1)
-            .padding(.horizontal, Theme.Spacing.md)
-            .padding(.vertical, Theme.Spacing.sm)
-            .background(Theme.Colors.surfaceSecondary)
-            .overlay(
-                Capsule()
-                    .stroke(Theme.Colors.secondary.opacity(0.3), lineWidth: 1)
-            )
-            .clipShape(Capsule())
+            Text(viewModel.liveTranscript)
+                .font(Theme.Typography.subheadline)
+                .foregroundColor(Theme.Colors.textSecondary)
+                .italic()
+                .lineLimit(1)
+                .padding(.horizontal, Theme.Spacing.md)
+                .padding(.vertical, Theme.Spacing.sm)
+                .background(Theme.Colors.surfaceSecondary)
+                .clipShape(Capsule())
             Spacer()
         }
         .padding(.horizontal, Theme.Spacing.md)
@@ -264,32 +243,27 @@ struct ConversationView: View {
     private var liveTutorBubble: some View {
         HStack {
             VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-                // Terminal prefix
-                Text("$ TUTOR.RESPONSE")
-                    .font(.system(size: 9, design: .monospaced))
-                    .foregroundColor(Theme.Colors.textTertiary)
-
                 Text(viewModel.liveTutorText)
                     .font(Theme.Typography.spanishBody)
-                    .foregroundColor(Theme.Colors.primary)
+                    .foregroundColor(Theme.Colors.textPrimary)
 
-                // Matrix-style typing indicator
+                // Typing indicator
                 HStack(spacing: 4) {
                     ForEach(0..<3) { i in
-                        Rectangle()
+                        Circle()
                             .fill(Theme.Colors.primary.opacity(0.6 - Double(i) * 0.15))
-                            .frame(width: 4, height: 12)
+                            .frame(width: 6, height: 6)
                     }
                 }
             }
             .padding(Theme.Spacing.md)
             .background(Theme.Colors.surface)
-            .overlay(
-                RoundedRectangle(cornerRadius: Theme.CornerRadius.lg)
-                    .stroke(Theme.Colors.primary.opacity(0.3), lineWidth: 1)
-            )
             .clipShape(RoundedRectangle(cornerRadius: Theme.CornerRadius.lg))
-            .shadow(color: Theme.Colors.glowGreen.opacity(0.2), radius: 8, y: 0)
+            .shadow(
+                color: Theme.Shadows.small.color,
+                radius: Theme.Shadows.small.radius,
+                y: Theme.Shadows.small.y
+            )
 
             Spacer(minLength: 60)
         }
@@ -300,23 +274,19 @@ struct ConversationView: View {
     private func suggestionsRow(_ suggestions: [String]) -> some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: Theme.Spacing.sm) {
-                // Prefix label
-                Text("//")
-                    .font(Theme.Typography.caption)
-                    .foregroundColor(Theme.Colors.textTertiary)
-
                 ForEach(suggestions, id: \.self) { suggestion in
-                    Text("[\(suggestion)]")
+                    Text(suggestion)
                         .font(Theme.Typography.caption)
-                        .foregroundColor(Theme.Colors.secondary)
+                        .foregroundColor(Theme.Colors.textPrimary)
                         .padding(.horizontal, Theme.Spacing.md)
                         .padding(.vertical, Theme.Spacing.sm)
                         .background(Theme.Colors.surface)
-                        .overlay(
-                            Capsule()
-                                .stroke(Theme.Colors.secondary.opacity(0.3), lineWidth: 1)
-                        )
                         .clipShape(Capsule())
+                        .shadow(
+                            color: Theme.Shadows.small.color,
+                            radius: Theme.Shadows.small.radius,
+                            y: Theme.Shadows.small.y
+                        )
                 }
             }
             .padding(.horizontal, Theme.Spacing.md)
@@ -357,7 +327,7 @@ struct ConversationView: View {
     private var advancedModeControls: some View {
         switch viewModel.conversationState {
         case .idle:
-            PrimaryButton("INITIALIZE", icon: "play.fill") {
+            PrimaryButton("Start Conversation", icon: "play.fill") {
                 viewModel.startRecording()
             }
 
@@ -368,56 +338,40 @@ struct ConversationView: View {
                     viewModel.pauseConversation()
                 } label: {
                     VStack(spacing: Theme.Spacing.xs) {
-                        Text("||")
-                            .font(.system(size: 20, weight: .bold, design: .monospaced))
-                            .foregroundColor(viewModel.isLocked ? Theme.Colors.textTertiary : Theme.Colors.warning)
+                        Image(systemName: "pause.fill")
+                            .font(.title2)
+                            .foregroundColor(viewModel.isLocked ? Theme.Colors.textTertiary : Theme.Colors.textSecondary)
                             .frame(width: 56, height: 56)
                             .background(Theme.Colors.surfaceSecondary)
-                            .overlay(
-                                Circle()
-                                    .stroke(Theme.Colors.warning.opacity(0.3), lineWidth: 1)
-                            )
                             .clipShape(Circle())
 
-                        Text("PAUSE")
+                        Text("Pause")
                             .font(Theme.Typography.caption)
-                            .foregroundColor(Theme.Colors.warning)
+                            .foregroundColor(Theme.Colors.textSecondary)
                     }
                 }
                 .disabled(viewModel.isLocked)
 
-                // Main recording indicator - Matrix style
+                // Main recording indicator
                 ZStack {
-                    // Outer pulse with glow
+                    // Outer pulse
                     Circle()
-                        .fill(viewModel.isLocked ? Theme.Colors.primary.opacity(0.15) : Theme.Colors.recording.opacity(0.15))
+                        .fill(viewModel.isLocked ? Theme.Colors.primary.opacity(0.2) : Theme.Colors.recording.opacity(0.2))
                         .frame(
                             width: 88 + CGFloat(viewModel.audioLevel) * 20,
                             height: 88 + CGFloat(viewModel.audioLevel) * 20
                         )
-                        .shadow(
-                            color: viewModel.isLocked ? Theme.Colors.glowGreen : Theme.Colors.recording.opacity(0.5),
-                            radius: 12, y: 0
-                        )
                         .animation(.easeInOut(duration: 0.1), value: viewModel.audioLevel)
 
-                    // Inner circle with border
+                    // Inner circle
                     Circle()
-                        .fill(Theme.Colors.surface)
+                        .fill(viewModel.isLocked ? Theme.Colors.primary : Theme.Colors.recording)
                         .frame(width: 72, height: 72)
-                        .overlay(
-                            Circle()
-                                .stroke(viewModel.isLocked ? Theme.Colors.primary : Theme.Colors.recording, lineWidth: 2)
-                        )
 
                     // Icon
                     Image(systemName: viewModel.isLocked ? "speaker.wave.2.fill" : "waveform")
                         .font(.title)
-                        .foregroundColor(viewModel.isLocked ? Theme.Colors.primary : Theme.Colors.recording)
-                        .shadow(
-                            color: viewModel.isLocked ? Theme.Colors.glowGreen : Theme.Colors.recording.opacity(0.5),
-                            radius: 4, y: 0
-                        )
+                        .foregroundColor(.white)
                 }
 
                 // Stop button
@@ -425,20 +379,16 @@ struct ConversationView: View {
                     viewModel.stopConversation()
                 } label: {
                     VStack(spacing: Theme.Spacing.xs) {
-                        Text("[X]")
-                            .font(.system(size: 16, weight: .bold, design: .monospaced))
-                            .foregroundColor(Theme.Colors.error)
+                        Image(systemName: "stop.fill")
+                            .font(.title2)
+                            .foregroundColor(Theme.Colors.textSecondary)
                             .frame(width: 56, height: 56)
                             .background(Theme.Colors.surfaceSecondary)
-                            .overlay(
-                                Circle()
-                                    .stroke(Theme.Colors.error.opacity(0.3), lineWidth: 1)
-                            )
                             .clipShape(Circle())
 
-                        Text("END")
+                        Text("End")
                             .font(Theme.Typography.caption)
-                            .foregroundColor(Theme.Colors.error)
+                            .foregroundColor(Theme.Colors.textSecondary)
                     }
                 }
             }
@@ -452,19 +402,14 @@ struct ConversationView: View {
                     VStack(spacing: Theme.Spacing.xs) {
                         Image(systemName: "play.fill")
                             .font(.title2)
-                            .foregroundColor(.black)
+                            .foregroundColor(.white)
                             .frame(width: 72, height: 72)
                             .background(Theme.Colors.primary)
-                            .overlay(
-                                Circle()
-                                    .stroke(Theme.Colors.primary, lineWidth: 1)
-                            )
                             .clipShape(Circle())
-                            .shadow(color: Theme.Colors.glowGreen, radius: 8, y: 0)
 
-                        Text("RESUME")
+                        Text("Resume")
                             .font(Theme.Typography.caption)
-                            .foregroundColor(Theme.Colors.primary)
+                            .foregroundColor(Theme.Colors.textPrimary)
                     }
                 }
 
@@ -473,20 +418,16 @@ struct ConversationView: View {
                     viewModel.stopConversation()
                 } label: {
                     VStack(spacing: Theme.Spacing.xs) {
-                        Text("[X]")
-                            .font(.system(size: 16, weight: .bold, design: .monospaced))
-                            .foregroundColor(Theme.Colors.error)
+                        Image(systemName: "stop.fill")
+                            .font(.title2)
+                            .foregroundColor(Theme.Colors.textSecondary)
                             .frame(width: 72, height: 72)
                             .background(Theme.Colors.surfaceSecondary)
-                            .overlay(
-                                Circle()
-                                    .stroke(Theme.Colors.error.opacity(0.3), lineWidth: 1)
-                            )
                             .clipShape(Circle())
 
-                        Text("END")
+                        Text("End")
                             .font(Theme.Typography.caption)
-                            .foregroundColor(Theme.Colors.error)
+                            .foregroundColor(Theme.Colors.textSecondary)
                     }
                 }
             }
@@ -525,25 +466,13 @@ struct KeyPhrasesSheet: View {
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: Theme.Spacing.lg) {
-                        // Terminal header
-                        HStack {
-                            Text("$ cat phrases.db")
-                                .font(.system(size: 10, design: .monospaced))
-                                .foregroundColor(Theme.Colors.textTertiary)
-                            Spacer()
-                        }
-
                         // Scenario context
                         VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
-                            HStack(spacing: Theme.Spacing.xs) {
-                                Text("//")
-                                    .foregroundColor(Theme.Colors.textTertiary)
-                                Text("KEY_PHRASES")
-                            }
-                            .font(Theme.Typography.title3)
-                            .foregroundColor(Theme.Colors.primary)
+                            Text("Useful Phrases")
+                                .font(Theme.Typography.title3)
+                                .foregroundColor(Theme.Colors.textPrimary)
 
-                            Text(">> MISSION: \(scenario.title.uppercased())")
+                            Text("For: \(scenario.title)")
                                 .font(Theme.Typography.subheadline)
                                 .foregroundColor(Theme.Colors.textSecondary)
                         }
@@ -559,10 +488,9 @@ struct KeyPhrasesSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("[CLOSE]") {
+                    Button("Done") {
                         dismiss()
                     }
-                    .font(Theme.Typography.caption)
                     .foregroundColor(Theme.Colors.primary)
                 }
             }
@@ -626,28 +554,23 @@ struct KeyPhraseRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-            // Spanish - primary text
-            HStack(spacing: Theme.Spacing.xs) {
-                Text(">")
-                    .foregroundColor(Theme.Colors.secondary)
-                Text(phrase.spanish)
-                    .foregroundColor(Theme.Colors.primary)
-            }
-            .font(Theme.Typography.spanishHeadline)
+            Text(phrase.spanish)
+                .font(Theme.Typography.spanishHeadline)
+                .foregroundColor(Theme.Colors.textPrimary)
 
-            // English translation - dimmed
-            Text("  // \(phrase.english)")
-                .font(Theme.Typography.caption)
-                .foregroundColor(Theme.Colors.textTertiary)
+            Text(phrase.english)
+                .font(Theme.Typography.subheadline)
+                .foregroundColor(Theme.Colors.textSecondary)
         }
         .padding(Theme.Spacing.md)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Theme.Colors.surface)
-        .overlay(
-            RoundedRectangle(cornerRadius: Theme.CornerRadius.md)
-                .stroke(Theme.Colors.primary.opacity(0.2), lineWidth: 1)
-        )
         .clipShape(RoundedRectangle(cornerRadius: Theme.CornerRadius.md))
+        .shadow(
+            color: Theme.Shadows.small.color,
+            radius: Theme.Shadows.small.radius,
+            y: Theme.Shadows.small.y
+        )
     }
 }
 

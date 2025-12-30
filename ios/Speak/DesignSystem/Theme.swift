@@ -1,64 +1,59 @@
 import SwiftUI
 
-/// Design system for the Speak app - Matrix / Cyberpunk Theme
+/// Design system for the Speak app - Warm Modernity
 enum Theme {
     // MARK: - Colors
 
     enum Colors {
-        // Core palette - The Matrix
-        static let background = Color(hex: "0A0A0A")           // Near black
-        static let primary = Color(hex: "00FF41")               // Matrix green
-        static let textPrimary = Color(hex: "00FF41")           // Matrix green text
-        static let surface = Color(hex: "0D1117")               // Dark surface
-        static let success = Color(hex: "39FF14")               // Neon green
+        // Core palette
+        static let background = Color(hex: "FDFCF8")      // Warm Sand
+        static let primary = Color(hex: "E07A5F")          // Terracotta
+        static let textPrimary = Color(hex: "3D405B")      // Slate
+        static let surface = Color(hex: "FFFFFF")          // White
+        static let success = Color(hex: "81B29A")          // Sage
 
         // Extended palette
-        static let secondary = Color(hex: "00D4AA")             // Cyan accent
-        static let accent = Color(hex: "00FF41")                // Matrix green
-        static let surfaceSecondary = Color(hex: "161B22")      // Slightly lighter dark
+        static let secondary = Color(hex: "F4A261")        // Warm amber
+        static let accent = Color(hex: "81B29A")           // Sage (same as success)
+        static let surfaceSecondary = Color(hex: "F8F6F0") // Slightly darker warm
 
-        // Text - Matrix shades
-        static let textSecondary = Color(hex: "00FF41").opacity(0.7)
-        static let textTertiary = Color(hex: "00FF41").opacity(0.4)
-        static let textDim = Color(hex: "00FF41").opacity(0.2)
+        // Text
+        static let textSecondary = Color(hex: "3D405B").opacity(0.6)
+        static let textTertiary = Color(hex: "3D405B").opacity(0.4)
 
         // Status
-        static let warning = Color(hex: "FFD700")               // Gold warning
-        static let error = Color(hex: "FF0040")                 // Neon red
+        static let warning = Color(hex: "F4A261")
+        static let error = Color(hex: "E07A5F")
 
-        // Recording - Red alert
-        static let recording = Color(hex: "FF0040")
-        static let recordingPulse = Color(hex: "FF0040").opacity(0.3)
+        // Recording
+        static let recording = Color(hex: "E07A5F")
+        static let recordingPulse = Color(hex: "E07A5F").opacity(0.3)
 
         // Live indicator
-        static let live = Color(hex: "FF0040")
-
-        // Glow colors
-        static let glowGreen = Color(hex: "00FF41").opacity(0.5)
-        static let glowCyan = Color(hex: "00D4AA").opacity(0.3)
+        static let live = Color(hex: "E63946")
     }
 
     // MARK: - Typography
 
     enum Typography {
-        // Headings - Monospace for that terminal feel
-        static let largeTitle = Font.system(.largeTitle, design: .monospaced).weight(.bold)
-        static let title = Font.system(.title, design: .monospaced).weight(.bold)
-        static let title2 = Font.system(.title2, design: .monospaced).weight(.bold)
-        static let title3 = Font.system(.title3, design: .monospaced).weight(.semibold)
+        // Headings - Serif design for elegance
+        static let largeTitle = Font.system(.largeTitle, design: .serif).weight(.bold)
+        static let title = Font.system(.title, design: .serif).weight(.bold)
+        static let title2 = Font.system(.title2, design: .serif).weight(.bold)
+        static let title3 = Font.system(.title3, design: .serif).weight(.semibold)
 
-        // Body - Monospace throughout
-        static let headline = Font.system(.headline, design: .monospaced).weight(.semibold)
-        static let body = Font.system(.body, design: .monospaced)
-        static let callout = Font.system(.callout, design: .monospaced)
-        static let subheadline = Font.system(.subheadline, design: .monospaced)
-        static let footnote = Font.system(.footnote, design: .monospaced)
-        static let caption = Font.system(.caption, design: .monospaced)
-        static let caption2 = Font.system(.caption2, design: .monospaced)
+        // Body - Rounded design for warmth
+        static let headline = Font.system(.headline, design: .rounded).weight(.semibold)
+        static let body = Font.system(.body, design: .rounded)
+        static let callout = Font.system(.callout, design: .rounded)
+        static let subheadline = Font.system(.subheadline, design: .rounded)
+        static let footnote = Font.system(.footnote, design: .rounded)
+        static let caption = Font.system(.caption, design: .rounded)
+        static let caption2 = Font.system(.caption2, design: .rounded)
 
-        // Spanish text (still monospace for consistency)
-        static let spanishHeadline = Font.system(.headline, design: .monospaced).weight(.medium)
-        static let spanishBody = Font.system(.body, design: .monospaced)
+        // Spanish text (serif for tutor messages)
+        static let spanishHeadline = Font.system(.headline, design: .serif).weight(.medium)
+        static let spanishBody = Font.system(.body, design: .serif)
     }
 
     // MARK: - Spacing
@@ -76,21 +71,21 @@ enum Theme {
     // MARK: - Corner Radius
 
     enum CornerRadius {
-        static let xs: CGFloat = 2
-        static let sm: CGFloat = 4
-        static let md: CGFloat = 8
-        static let lg: CGFloat = 12
-        static let xl: CGFloat = 16
-        static let card: CGFloat = 8       // More angular for cyber look
+        static let xs: CGFloat = 4
+        static let sm: CGFloat = 8
+        static let md: CGFloat = 12
+        static let lg: CGFloat = 16
+        static let xl: CGFloat = 20
+        static let card: CGFloat = 20
         static let full: CGFloat = 9999
     }
 
-    // MARK: - Shadows (Glows in Matrix theme)
+    // MARK: - Shadows
 
     enum Shadows {
-        static let small = ShadowStyle(color: Color(hex: "00FF41").opacity(0.2), radius: 4, y: 0)
-        static let medium = ShadowStyle(color: Color(hex: "00FF41").opacity(0.3), radius: 8, y: 0)
-        static let large = ShadowStyle(color: Color(hex: "00FF41").opacity(0.4), radius: 16, y: 0)
+        static let small = ShadowStyle(color: Color(hex: "3D405B").opacity(0.08), radius: 4, y: 2)
+        static let medium = ShadowStyle(color: Color(hex: "3D405B").opacity(0.1), radius: 8, y: 4)
+        static let large = ShadowStyle(color: Color(hex: "3D405B").opacity(0.12), radius: 16, y: 8)
     }
 }
 
@@ -130,7 +125,7 @@ extension Color {
 
 // MARK: - Reusable Components
 
-/// Primary button with Matrix glow
+/// Primary button with capsule shape
 struct PrimaryButton: View {
     let title: String
     let icon: String?
@@ -150,29 +145,20 @@ struct PrimaryButton: View {
                 if let icon = icon {
                     Image(systemName: icon)
                 }
-                Text(title.uppercased())
+                Text(title)
             }
             .font(Theme.Typography.headline)
-            .foregroundColor(isDisabled ? Theme.Colors.textTertiary : Color.black)
+            .foregroundColor(.white)
             .frame(maxWidth: .infinity)
             .padding(.vertical, Theme.Spacing.md)
-            .background(
-                isDisabled
-                    ? Theme.Colors.textTertiary
-                    : Theme.Colors.primary
-            )
-            .clipShape(RoundedRectangle(cornerRadius: Theme.CornerRadius.sm))
-            .overlay(
-                RoundedRectangle(cornerRadius: Theme.CornerRadius.sm)
-                    .stroke(Theme.Colors.primary, lineWidth: isDisabled ? 0 : 1)
-            )
-            .shadow(color: isDisabled ? .clear : Theme.Colors.glowGreen, radius: 8, y: 0)
+            .background(isDisabled ? Theme.Colors.textTertiary : Theme.Colors.primary)
+            .clipShape(Capsule())
         }
         .disabled(isDisabled)
     }
 }
 
-/// Card container with Matrix border glow
+/// Card container with surface background and shadow
 struct Card<Content: View>: View {
     let content: Content
 
@@ -184,156 +170,85 @@ struct Card<Content: View>: View {
         content
             .background(Theme.Colors.surface)
             .clipShape(RoundedRectangle(cornerRadius: Theme.CornerRadius.card))
-            .overlay(
-                RoundedRectangle(cornerRadius: Theme.CornerRadius.card)
-                    .stroke(Theme.Colors.primary.opacity(0.3), lineWidth: 1)
+            .shadow(
+                color: Theme.Shadows.medium.color,
+                radius: Theme.Shadows.medium.radius,
+                y: Theme.Shadows.medium.y
             )
-            .shadow(color: Theme.Colors.glowGreen.opacity(0.2), radius: 8, y: 0)
     }
 }
 
-/// Level badge chip - Matrix style
+/// Level badge chip
 struct LevelBadge: View {
     let level: CEFRLevel
 
     var body: some View {
-        Text("[\(level.rawValue)]")
+        Text(level.rawValue)
             .font(Theme.Typography.caption)
             .fontWeight(.semibold)
             .foregroundColor(Theme.Colors.primary)
             .padding(.horizontal, Theme.Spacing.sm)
             .padding(.vertical, Theme.Spacing.xs)
-            .background(Theme.Colors.primary.opacity(0.1))
-            .overlay(
-                RoundedRectangle(cornerRadius: Theme.CornerRadius.xs)
-                    .stroke(Theme.Colors.primary.opacity(0.5), lineWidth: 1)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: Theme.CornerRadius.xs))
+            .background(Theme.Colors.primary.opacity(0.15))
+            .clipShape(Capsule())
     }
 }
 
-/// Duration badge - Terminal style
+/// Duration badge
 struct DurationBadge: View {
     let minutes: Int
 
     var body: some View {
         HStack(spacing: Theme.Spacing.xs) {
             Image(systemName: "clock")
-            Text("\(minutes)min")
+            Text("\(minutes) min")
         }
         .font(Theme.Typography.caption)
         .foregroundColor(Theme.Colors.textSecondary)
     }
 }
 
-/// Streak chip - Matrix flame
+/// Streak chip with flame icon
 struct StreakChip: View {
     let count: Int
 
     var body: some View {
         HStack(spacing: Theme.Spacing.xs) {
             Image(systemName: "flame.fill")
-                .foregroundColor(Theme.Colors.warning)
+                .foregroundColor(.orange)
             Text("\(count)")
-                .fontWeight(.bold)
+                .fontWeight(.semibold)
         }
         .font(Theme.Typography.subheadline)
-        .foregroundColor(Theme.Colors.primary)
+        .foregroundColor(Theme.Colors.textPrimary)
         .padding(.horizontal, Theme.Spacing.md)
         .padding(.vertical, Theme.Spacing.sm)
         .background(Theme.Colors.surface)
-        .overlay(
-            Capsule()
-                .stroke(Theme.Colors.primary.opacity(0.5), lineWidth: 1)
-        )
         .clipShape(Capsule())
-        .shadow(color: Theme.Colors.glowGreen.opacity(0.3), radius: 4, y: 0)
+        .shadow(
+            color: Theme.Shadows.small.color,
+            radius: Theme.Shadows.small.radius,
+            y: Theme.Shadows.small.y
+        )
     }
 }
 
-/// Live badge - Pulsing red alert
+/// Live badge for advanced mode
 struct LiveBadge: View {
-    @State private var isPulsing = false
-
     var body: some View {
         HStack(spacing: Theme.Spacing.xs) {
             Circle()
                 .fill(Theme.Colors.live)
                 .frame(width: 6, height: 6)
-                .scaleEffect(isPulsing ? 1.3 : 1.0)
-                .animation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true), value: isPulsing)
-            Text("LIVE")
+            Text("Live")
                 .font(Theme.Typography.caption)
-                .fontWeight(.bold)
+                .fontWeight(.medium)
         }
         .foregroundColor(Theme.Colors.live)
         .padding(.horizontal, Theme.Spacing.sm)
         .padding(.vertical, Theme.Spacing.xs)
-        .background(Theme.Colors.live.opacity(0.15))
-        .overlay(
-            Capsule()
-                .stroke(Theme.Colors.live, lineWidth: 1)
-        )
+        .background(Theme.Colors.live.opacity(0.1))
         .clipShape(Capsule())
-        .shadow(color: Theme.Colors.live.opacity(0.5), radius: 4, y: 0)
-        .onAppear { isPulsing = true }
-    }
-}
-
-// MARK: - Matrix-specific Components
-
-/// Scanline overlay effect
-struct ScanlineOverlay: View {
-    var body: some View {
-        GeometryReader { geometry in
-            VStack(spacing: 2) {
-                ForEach(0..<Int(geometry.size.height / 4), id: \.self) { _ in
-                    Rectangle()
-                        .fill(Color.black.opacity(0.1))
-                        .frame(height: 1)
-                    Spacer()
-                        .frame(height: 3)
-                }
-            }
-        }
-        .allowsHitTesting(false)
-    }
-}
-
-/// Terminal cursor blink
-struct TerminalCursor: View {
-    @State private var isVisible = true
-
-    var body: some View {
-        Rectangle()
-            .fill(Theme.Colors.primary)
-            .frame(width: 8, height: 16)
-            .opacity(isVisible ? 1 : 0)
-            .animation(.easeInOut(duration: 0.5).repeatForever(autoreverses: true), value: isVisible)
-            .onAppear { isVisible.toggle() }
-    }
-}
-
-/// Matrix rain character (for decorative use)
-struct MatrixRainDrop: View {
-    let character: String
-    let delay: Double
-
-    @State private var opacity: Double = 0
-
-    var body: some View {
-        Text(character)
-            .font(.system(size: 12, design: .monospaced))
-            .foregroundColor(Theme.Colors.primary)
-            .opacity(opacity)
-            .onAppear {
-                withAnimation(.easeIn(duration: 0.5).delay(delay)) {
-                    opacity = 1
-                }
-                withAnimation(.easeOut(duration: 1.0).delay(delay + 0.5)) {
-                    opacity = 0.3
-                }
-            }
     }
 }
 
@@ -344,25 +259,14 @@ extension View {
         self
             .background(Theme.Colors.surface)
             .clipShape(RoundedRectangle(cornerRadius: Theme.CornerRadius.card))
-            .overlay(
-                RoundedRectangle(cornerRadius: Theme.CornerRadius.card)
-                    .stroke(Theme.Colors.primary.opacity(0.3), lineWidth: 1)
+            .shadow(
+                color: Theme.Shadows.medium.color,
+                radius: Theme.Shadows.medium.radius,
+                y: Theme.Shadows.medium.y
             )
-            .shadow(color: Theme.Colors.glowGreen.opacity(0.2), radius: 8, y: 0)
     }
 
     func applyShadow(_ style: ShadowStyle) -> some View {
         self.shadow(color: style.color, radius: style.radius, y: style.y)
-    }
-
-    func matrixGlow(radius: CGFloat = 8) -> some View {
-        self.shadow(color: Theme.Colors.glowGreen, radius: radius, y: 0)
-    }
-
-    func terminalBorder() -> some View {
-        self.overlay(
-            RoundedRectangle(cornerRadius: Theme.CornerRadius.sm)
-                .stroke(Theme.Colors.primary.opacity(0.5), lineWidth: 1)
-        )
     }
 }

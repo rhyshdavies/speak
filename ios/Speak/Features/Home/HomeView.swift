@@ -1,13 +1,13 @@
 import SwiftUI
 
-/// Home screen with Matrix cyberpunk styling
+/// Home screen with greeting, hero card, quick actions, and recent scenarios
 struct HomeView: View {
     @Binding var selectedLevel: CEFRLevel
     @Binding var selectedMode: ConversationMode
     @Binding var showingScenarios: Bool
 
     @ObservedObject private var streakManager = StreakManager.shared
-    @State private var userName: String = "AGENT"
+    @State private var userName: String = "Learner"
     @State private var recentScenarios: [ScenarioContext] = [.greetings, .restaurant, .cafe]
 
     // Sheet states
@@ -15,22 +15,13 @@ struct HomeView: View {
     @State private var showingReview: Bool = false
     @State private var showingPronunciation: Bool = false
 
-    // Animation states
-    @State private var terminalReady = false
-
     private var greeting: String {
         let hour = Calendar.current.component(.hour, from: Date())
         switch hour {
-        case 5..<12: return "// BUENOS_DÍAS"
-        case 12..<18: return "// BUENAS_TARDES"
-        default: return "// BUENAS_NOCHES"
+        case 5..<12: return "Buenos días"
+        case 12..<18: return "Buenas tardes"
+        default: return "Buenas noches"
         }
-    }
-
-    private var systemTime: String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "HH:mm:ss"
-        return formatter.string(from: Date())
     }
 
     var body: some View {
@@ -81,49 +72,28 @@ struct HomeView: View {
     // MARK: - Header
 
     private var headerSection: some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
-            // Terminal header line
-            HStack {
-                Text("SPEAK://SYSTEM")
-                    .font(.system(size: 10, weight: .bold, design: .monospaced))
-                    .foregroundColor(Theme.Colors.textTertiary)
+        HStack(alignment: .center) {
+            VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+                Text("\(greeting),")
+                    .font(Theme.Typography.title2)
+                    .foregroundColor(Theme.Colors.textPrimary)
 
-                Spacer()
-
-                Text("[\(systemTime)]")
-                    .font(.system(size: 10, design: .monospaced))
-                    .foregroundColor(Theme.Colors.textTertiary)
+                Text(userName)
+                    .font(Theme.Typography.title)
+                    .foregroundColor(Theme.Colors.textPrimary)
             }
 
-            // Main greeting
-            HStack(alignment: .bottom) {
-                VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
-                    Text(greeting)
-                        .font(Theme.Typography.caption)
-                        .foregroundColor(Theme.Colors.textSecondary)
+            Spacer()
 
-                    HStack(spacing: Theme.Spacing.xs) {
-                        Text(">")
-                            .foregroundColor(Theme.Colors.primary)
-                        Text(userName)
-                            .foregroundColor(Theme.Colors.primary)
-                        TerminalCursor()
-                    }
-                    .font(Theme.Typography.title)
-                }
-
-                Spacer()
-
-                // Streak chip - tappable
-                Button {
-                    HapticManager.selection()
-                    showingProgress = true
-                } label: {
-                    StreakChipView(
-                        count: streakManager.currentStreak,
-                        isActive: streakManager.practicedToday
-                    )
-                }
+            // Streak chip - tappable
+            Button {
+                HapticManager.selection()
+                showingProgress = true
+            } label: {
+                StreakChipView(
+                    count: streakManager.currentStreak,
+                    isActive: streakManager.practicedToday
+                )
             }
         }
         .padding(.top, Theme.Spacing.md)
@@ -134,15 +104,13 @@ struct HomeView: View {
     private var heroCard: some View {
         Card {
             VStack(alignment: .leading, spacing: Theme.Spacing.md) {
-                // Top row - terminal style
+                // Top row
                 HStack {
-                    HStack(spacing: Theme.Spacing.xs) {
-                        Text("$")
-                            .foregroundColor(Theme.Colors.primary)
-                        Text("MISSION_BRIEF")
-                            .foregroundColor(Theme.Colors.textSecondary)
-                    }
-                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    Text("Today's Practice")
+                        .font(Theme.Typography.caption)
+                        .foregroundColor(Theme.Colors.textSecondary)
+                        .textCase(.uppercase)
+                        .tracking(1)
 
                     Spacer()
 
@@ -151,15 +119,11 @@ struct HomeView: View {
                     }
                 }
 
-                // Scenario info - terminal output style
+                // Scenario info
                 VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
-                    HStack(spacing: Theme.Spacing.xs) {
-                        Text(">>")
-                            .foregroundColor(Theme.Colors.secondary)
-                        Text(suggestedScenario.title.uppercased())
-                    }
-                    .font(Theme.Typography.title2)
-                    .foregroundColor(Theme.Colors.primary)
+                    Text(suggestedScenario.title)
+                        .font(Theme.Typography.title2)
+                        .foregroundColor(Theme.Colors.textPrimary)
 
                     Text(suggestedScenario.description)
                         .font(Theme.Typography.body)
@@ -167,22 +131,21 @@ struct HomeView: View {
                         .lineLimit(2)
                 }
 
-                // Badges - data readout style
+                // Badges
                 HStack(spacing: Theme.Spacing.md) {
                     LevelBadge(level: selectedLevel)
                     DurationBadge(minutes: 5)
 
                     Spacer()
 
-                    // Scenario icon with glow
+                    // Scenario icon
                     Image(systemName: suggestedScenario.type.icon)
                         .font(.title2)
-                        .foregroundColor(Theme.Colors.primary)
-                        .shadow(color: Theme.Colors.glowGreen, radius: 4, y: 0)
+                        .foregroundColor(Theme.Colors.primary.opacity(0.5))
                 }
 
-                // CTA Button - EXECUTE command
-                PrimaryButton("EXECUTE", icon: "play.fill") {
+                // CTA Button
+                PrimaryButton("Start", icon: "play.fill") {
                     HapticManager.mediumTap()
                     showingScenarios = true
                 }
@@ -202,18 +165,14 @@ struct HomeView: View {
 
     private var quickActionsSection: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.md) {
-            HStack(spacing: Theme.Spacing.xs) {
-                Text("//")
-                    .foregroundColor(Theme.Colors.textTertiary)
-                Text("QUICK_ACCESS")
-            }
-            .font(Theme.Typography.headline)
-            .foregroundColor(Theme.Colors.textSecondary)
+            Text("Quick Actions")
+                .font(Theme.Typography.headline)
+                .foregroundColor(Theme.Colors.textPrimary)
 
             HStack(spacing: Theme.Spacing.md) {
                 QuickActionButton(
                     icon: "bubble.left.and.bubble.right",
-                    title: "CHAT",
+                    title: "Free Chat",
                     color: Theme.Colors.success
                 ) {
                     HapticManager.mediumTap()
@@ -222,7 +181,7 @@ struct HomeView: View {
 
                 QuickActionButton(
                     icon: "book.closed",
-                    title: "REVIEW",
+                    title: "Review",
                     color: Theme.Colors.secondary
                 ) {
                     HapticManager.selection()
@@ -231,7 +190,7 @@ struct HomeView: View {
 
                 QuickActionButton(
                     icon: "waveform",
-                    title: "AUDIO",
+                    title: "Pronounce",
                     color: Theme.Colors.primary
                 ) {
                     HapticManager.selection()
@@ -245,13 +204,9 @@ struct HomeView: View {
 
     private var settingsSection: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.md) {
-            HStack(spacing: Theme.Spacing.xs) {
-                Text("//")
-                    .foregroundColor(Theme.Colors.textTertiary)
-                Text("SYSTEM_CONFIG")
-            }
-            .font(Theme.Typography.headline)
-            .foregroundColor(Theme.Colors.textSecondary)
+            Text("Settings")
+                .font(Theme.Typography.headline)
+                .foregroundColor(Theme.Colors.textPrimary)
 
             Card {
                 VStack(spacing: Theme.Spacing.md) {
@@ -331,21 +286,17 @@ struct HomeView: View {
     private var recentScenariosSection: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.md) {
             HStack {
-                HStack(spacing: Theme.Spacing.xs) {
-                    Text("//")
-                        .foregroundColor(Theme.Colors.textTertiary)
-                    Text("RECENT_MISSIONS")
-                }
-                .font(Theme.Typography.headline)
-                .foregroundColor(Theme.Colors.textSecondary)
+                Text("Jump Back In")
+                    .font(Theme.Typography.headline)
+                    .foregroundColor(Theme.Colors.textPrimary)
 
                 Spacer()
 
                 Button {
                     showingScenarios = true
                 } label: {
-                    Text("[VIEW_ALL]")
-                        .font(Theme.Typography.caption)
+                    Text("See all")
+                        .font(Theme.Typography.subheadline)
                         .foregroundColor(Theme.Colors.primary)
                 }
             }

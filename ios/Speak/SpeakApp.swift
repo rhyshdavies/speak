@@ -28,7 +28,7 @@ struct RootView: View {
                 )
             }
         }
-        .preferredColorScheme(.dark) // Matrix cyberpunk theme
+        .preferredColorScheme(.light) // Warm modernity theme uses light mode
     }
 }
 

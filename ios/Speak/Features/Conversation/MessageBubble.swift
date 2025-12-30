@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Message bubble for displaying conversation messages
+/// Message bubble for displaying conversation messages - Matrix cyberpunk style
 struct MessageBubble: View {
     let message: ChatMessage
     var showTranslation: Bool = true
@@ -16,6 +16,14 @@ struct MessageBubble: View {
             if isUser { Spacer(minLength: 60) }
 
             VStack(alignment: isUser ? .trailing : .leading, spacing: Theme.Spacing.sm) {
+                // Terminal label
+                HStack(spacing: Theme.Spacing.xs) {
+                    Text(isUser ? "$ USER.INPUT" : "$ TUTOR.OUTPUT")
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundColor(Theme.Colors.textTertiary)
+                }
+                .frame(maxWidth: .infinity, alignment: isUser ? .trailing : .leading)
+
                 // Main message bubble
                 mainBubble
 
@@ -33,11 +41,17 @@ struct MessageBubble: View {
 
     private var mainBubble: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
-            // Spanish text - serif for tutor, rounded for user
+            // Spanish text with Matrix styling
             if let spanish = message.spanishText {
-                Text(spanish)
-                    .font(isUser ? Theme.Typography.body : Theme.Typography.spanishBody)
-                    .foregroundColor(isUser ? .white : Theme.Colors.textPrimary)
+                HStack(spacing: Theme.Spacing.xs) {
+                    if !isUser {
+                        Text(">")
+                            .foregroundColor(Theme.Colors.secondary)
+                    }
+                    Text(spanish)
+                        .foregroundColor(isUser ? .black : Theme.Colors.primary)
+                }
+                .font(isUser ? Theme.Typography.body : Theme.Typography.spanishBody)
             }
 
             // English translation disclosure (for tutor messages only)
@@ -47,11 +61,18 @@ struct MessageBubble: View {
         }
         .padding(Theme.Spacing.md)
         .background(bubbleBackground)
+        .overlay(
+            RoundedRectangle(cornerRadius: Theme.CornerRadius.lg)
+                .stroke(
+                    isUser ? Theme.Colors.primary : Theme.Colors.primary.opacity(0.3),
+                    lineWidth: 1
+                )
+        )
         .clipShape(RoundedRectangle(cornerRadius: Theme.CornerRadius.lg))
         .shadow(
-            color: isUser ? Color.clear : Theme.Shadows.small.color,
-            radius: Theme.Shadows.small.radius,
-            y: Theme.Shadows.small.y
+            color: isUser ? Theme.Colors.glowGreen : Theme.Colors.glowGreen.opacity(0.2),
+            radius: isUser ? 8 : 4,
+            y: 0
         )
     }
 
@@ -69,19 +90,18 @@ struct MessageBubble: View {
                 }
             } label: {
                 HStack(spacing: Theme.Spacing.xs) {
-                    Image(systemName: isTranslationExpanded ? "chevron.down" : "chevron.right")
-                        .font(.caption2)
-                    Text(isTranslationExpanded ? "Hide English" : "Show English")
+                    Text(isTranslationExpanded ? "[-]" : "[+]")
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    Text(isTranslationExpanded ? "HIDE_EN" : "SHOW_EN")
                         .font(Theme.Typography.caption)
                 }
                 .foregroundColor(Theme.Colors.textTertiary)
             }
 
             if isTranslationExpanded {
-                Text(english)
-                    .font(Theme.Typography.subheadline)
-                    .foregroundColor(Theme.Colors.textSecondary)
-                    .italic()
+                Text("// \(english)")
+                    .font(Theme.Typography.caption)
+                    .foregroundColor(Theme.Colors.textTertiary)
                     .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
@@ -91,46 +111,43 @@ struct MessageBubble: View {
 
     private func correctionRow(_ correction: String) -> some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
-            // Coach header
+            // Matrix-style coach header
             HStack(spacing: Theme.Spacing.xs) {
-                Image(systemName: "graduationcap.fill")
-                    .font(.caption)
-                    .foregroundColor(Theme.Colors.success)
-
-                Text("Coach")
-                    .font(Theme.Typography.caption)
-                    .fontWeight(.medium)
-                    .foregroundColor(Theme.Colors.success)
+                Text(">>")
+                    .foregroundColor(Theme.Colors.secondary)
+                Text("SYNTAX_CORRECTION")
+                    .foregroundColor(Theme.Colors.secondary)
             }
+            .font(.system(size: 10, weight: .bold, design: .monospaced))
 
-            // Corrected phrase with dashed underline effect
+            // Corrected phrase
             VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
-                Text("Try saying:")
-                    .font(Theme.Typography.caption)
-                    .foregroundColor(Theme.Colors.textSecondary)
+                Text("// suggested.fix:")
+                    .font(.system(size: 9, design: .monospaced))
+                    .foregroundColor(Theme.Colors.textTertiary)
 
-                Text(correction)
-                    .font(Theme.Typography.spanishBody)
-                    .foregroundColor(Theme.Colors.textPrimary)
-                    .padding(.vertical, Theme.Spacing.xs)
-                    .overlay(alignment: .bottom) {
-                        Rectangle()
-                            .stroke(style: StrokeStyle(lineWidth: 1, dash: [4, 2]))
-                            .foregroundColor(Theme.Colors.success.opacity(0.5))
-                            .frame(height: 1)
-                    }
+                HStack(spacing: Theme.Spacing.xs) {
+                    Text(">")
+                        .foregroundColor(Theme.Colors.success)
+                    Text(correction)
+                        .foregroundColor(Theme.Colors.success)
+                }
+                .font(Theme.Typography.spanishBody)
             }
 
             // English translation of correction
             if let correctionEnglish = message.correctionEnglish {
-                Text(correctionEnglish)
+                Text("// \(correctionEnglish)")
                     .font(Theme.Typography.caption)
-                    .foregroundColor(Theme.Colors.textSecondary)
-                    .italic()
+                    .foregroundColor(Theme.Colors.textTertiary)
             }
         }
         .padding(Theme.Spacing.md)
-        .background(Theme.Colors.success.opacity(0.08))
+        .background(Theme.Colors.success.opacity(0.05))
+        .overlay(
+            RoundedRectangle(cornerRadius: Theme.CornerRadius.md)
+                .stroke(Theme.Colors.success.opacity(0.3), lineWidth: 1)
+        )
         .clipShape(RoundedRectangle(cornerRadius: Theme.CornerRadius.md))
     }
 }

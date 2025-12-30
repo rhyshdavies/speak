@@ -1,13 +1,44 @@
 // CEFR Proficiency Levels
-export type CEFRLevel = 'A1' | 'A2' | 'B1' | 'B2';
+export type CEFRLevel = 'A1' | 'A2' | 'B1' | 'B2' | 'C1' | 'C2';
 
 // Scenario types for structured learning
 export type ScenarioType =
-  | 'airport'
-  | 'restaurant'
+  // Beginner (A1)
   | 'greetings'
+  | 'numbers'
+  | 'directions'
+  | 'taxi'
+  | 'cafe'
+  | 'freeConversationA1'
+  // Elementary (A2)
+  | 'restaurant'
   | 'hotel'
-  | 'shopping';
+  | 'shopping'
+  | 'pharmacy'
+  | 'airport'
+  | 'freeConversationA2'
+  // Intermediate (B1)
+  | 'doctor'
+  | 'apartment'
+  | 'museum'
+  | 'phoneCall'
+  | 'complaints'
+  | 'freeConversationB1'
+  // Advanced (B2)
+  | 'bank'
+  | 'jobInterview'
+  | 'carRental'
+  | 'legalHelp'
+  | 'networking'
+  | 'freeConversationB2'
+  // Mastery (C1-C2)
+  | 'debate'
+  | 'negotiation'
+  | 'mediaInterview'
+  | 'academicPresentation'
+  | 'crisisManagement'
+  | 'freeConversationC1'
+  | 'freeConversationC2';
 
 // Chat message structure
 export interface ChatMessage {

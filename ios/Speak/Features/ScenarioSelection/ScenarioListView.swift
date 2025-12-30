@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// List of available scenarios to practice
+/// List of available scenarios in a 2-column grid
 struct ScenarioListView: View {
     let selectedLevel: CEFRLevel
     let selectedMode: ConversationMode
@@ -8,25 +8,41 @@ struct ScenarioListView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var selectedScenario: ScenarioContext?
 
+    private let columns = [
+        GridItem(.flexible(), spacing: 16),
+        GridItem(.flexible(), spacing: 16)
+    ]
+
+    /// Scenarios appropriate for the selected level
+    private var availableScenarios: [ScenarioContext] {
+        ScenarioContext.scenarios(for: selectedLevel)
+    }
+
     var body: some View {
         ZStack {
-            Theme.Gradients.background
+            Theme.Colors.background
                 .ignoresSafeArea()
 
-            ScrollView {
+            ScrollView(showsIndicators: false) {
                 VStack(spacing: Theme.Spacing.lg) {
                     // Header
                     headerSection
 
-                    // Scenario Cards
-                    ForEach(ScenarioContext.allScenarios) { scenario in
-                        ScenarioCard(scenario: scenario) {
-                            HapticManager.mediumTap()
-                            selectedScenario = scenario
+                    // Scenario Grid
+                    LazyVGrid(columns: columns, spacing: 16) {
+                        ForEach(availableScenarios) { scenario in
+                            ScenarioGridCard(
+                                scenario: scenario,
+                                level: selectedLevel
+                            ) {
+                                HapticManager.mediumTap()
+                                selectedScenario = scenario
+                            }
                         }
                     }
+                    .padding(.horizontal, Theme.Spacing.md)
                 }
-                .padding(Theme.Spacing.lg)
+                .padding(.bottom, Theme.Spacing.xxl)
             }
         }
         .navigationBarBackButtonHidden(true)
@@ -40,6 +56,14 @@ struct ScenarioListView: View {
                         Text("Back")
                     }
                     .foregroundColor(Theme.Colors.primary)
+                }
+            }
+
+            ToolbarItem(placement: .principal) {
+                VStack(spacing: 2) {
+                    Text("Scenarios")
+                        .font(Theme.Typography.headline)
+                        .foregroundColor(Theme.Colors.textPrimary)
                 }
             }
         }
@@ -57,90 +81,121 @@ struct ScenarioListView: View {
         }
     }
 
-    private var headerSection: some View {
-        VStack(spacing: Theme.Spacing.sm) {
-            Text("Choose a Scenario")
-                .font(Theme.Typography.title)
-                .foregroundColor(Theme.Colors.textPrimary)
+    // MARK: - Header
 
+    private var headerSection: some View {
+        VStack(spacing: Theme.Spacing.md) {
+            // Level and Mode badges
             HStack(spacing: Theme.Spacing.md) {
-                Label(selectedLevel.displayName, systemImage: selectedLevel.icon)
+                LevelBadge(level: selectedLevel)
+
+                if selectedMode == .advanced {
+                    LiveBadge()
+                } else {
+                    HStack(spacing: Theme.Spacing.xs) {
+                        Image(systemName: selectedMode.icon)
+                        Text(selectedMode.displayName)
+                    }
                     .font(Theme.Typography.caption)
                     .foregroundColor(Theme.Colors.textSecondary)
-
-                Label(selectedMode.displayName, systemImage: selectedMode.icon)
-                    .font(Theme.Typography.caption)
-                    .foregroundColor(selectedMode == .advanced ? Theme.Colors.primary : Theme.Colors.textSecondary)
+                    .padding(.horizontal, Theme.Spacing.sm)
+                    .padding(.vertical, Theme.Spacing.xs)
+                    .background(Theme.Colors.surfaceSecondary)
+                    .clipShape(Capsule())
+                }
             }
+
+            // Scenario count
+            Text("\(availableScenarios.count) scenarios available")
+                .font(Theme.Typography.subheadline)
+                .foregroundColor(Theme.Colors.textSecondary)
         }
-        .padding(.bottom, Theme.Spacing.md)
+        .padding(.top, Theme.Spacing.md)
+        .padding(.horizontal, Theme.Spacing.md)
     }
 }
 
-// MARK: - Scenario Card
+// MARK: - Scenario Grid Card
 
-struct ScenarioCard: View {
+struct ScenarioGridCard: View {
     let scenario: ScenarioContext
-    let onSelect: () -> Void
+    let level: CEFRLevel
+    let action: () -> Void
 
     var body: some View {
-        Button(action: onSelect) {
-            VStack(alignment: .leading, spacing: Theme.Spacing.md) {
-                // Header
-                HStack {
-                    Image(systemName: scenario.type.icon)
-                        .font(.title2)
-                        .foregroundColor(Theme.Colors.primary)
-                        .frame(width: 40, height: 40)
-                        .background(Theme.Colors.primary.opacity(0.2))
-                        .cornerRadius(Theme.CornerRadius.sm)
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 0) {
+                // Top section with gradient background
+                ZStack(alignment: .bottomLeading) {
+                    // Background gradient
+                    LinearGradient(
+                        colors: [
+                            scenarioColor.opacity(0.3),
+                            scenarioColor.opacity(0.1)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
 
-                    VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
-                        Text(scenario.title)
-                            .font(Theme.Typography.headline)
-                            .foregroundColor(Theme.Colors.textPrimary)
-
-                        Text(scenario.setting)
-                            .font(Theme.Typography.caption)
-                            .foregroundColor(Theme.Colors.textSecondary)
-                    }
-
-                    Spacer()
-
-                    Image(systemName: "chevron.right")
-                        .foregroundColor(Theme.Colors.textTertiary)
-                }
-
-                // Description
-                Text(scenario.description)
-                    .font(Theme.Typography.subheadline)
-                    .foregroundColor(Theme.Colors.textSecondary)
-                    .multilineTextAlignment(.leading)
-
-                // Objectives
-                VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-                    Text("You'll practice:")
-                        .font(Theme.Typography.caption)
-                        .foregroundColor(Theme.Colors.textTertiary)
-
-                    ForEach(scenario.objectives.prefix(2), id: \.self) { objective in
-                        HStack(spacing: Theme.Spacing.xs) {
-                            Image(systemName: "checkmark.circle")
-                                .font(.caption)
-                                .foregroundColor(Theme.Colors.accent)
-
-                            Text(objective)
-                                .font(Theme.Typography.caption)
-                                .foregroundColor(Theme.Colors.textSecondary)
+                    // Icon
+                    VStack {
+                        Spacer()
+                        HStack {
+                            Image(systemName: scenario.type.icon)
+                                .font(.system(size: 32))
+                                .foregroundColor(scenarioColor)
+                            Spacer()
                         }
+                        .padding(Theme.Spacing.md)
                     }
                 }
+                .frame(height: 100)
+
+                // Bottom section with title and level
+                VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+                    Text(scenario.title)
+                        .font(Theme.Typography.headline)
+                        .foregroundColor(Theme.Colors.textPrimary)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+
+                    // Level indicator
+                    Text(scenario.type.minimumLevel.rawValue)
+                        .font(Theme.Typography.caption)
+                        .foregroundColor(Theme.Colors.textSecondary)
+                }
+                .padding(Theme.Spacing.md)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Theme.Colors.surface)
             }
-            .padding(Theme.Spacing.md)
-            .background(Theme.Colors.surface)
-            .cornerRadius(Theme.CornerRadius.md)
+            .clipShape(RoundedRectangle(cornerRadius: Theme.CornerRadius.card))
+            .shadow(
+                color: Theme.Shadows.small.color,
+                radius: Theme.Shadows.small.radius,
+                y: Theme.Shadows.small.y
+            )
         }
         .buttonStyle(.plain)
+        .aspectRatio(3/4, contentMode: .fit)
+    }
+
+    private var scenarioColor: Color {
+        switch scenario.type.color {
+        case "green": return Color(hex: "81B29A")
+        case "mint": return Color(hex: "A8DADC")
+        case "teal": return Color(hex: "2A9D8F")
+        case "orange": return Color(hex: "F4A261")
+        case "purple": return Color(hex: "9B72CF")
+        case "pink": return Color(hex: "E07A9A")
+        case "blue": return Color(hex: "457B9D")
+        case "red": return Color(hex: "E07A5F")
+        case "brown": return Color(hex: "8B7355")
+        case "indigo": return Color(hex: "5C6BC0")
+        case "cyan": return Color(hex: "4DD0E1")
+        case "gray": return Color(hex: "78909C")
+        case "yellow": return Color(hex: "F4A261")
+        default: return Theme.Colors.primary
+        }
     }
 }
 
@@ -148,6 +203,6 @@ struct ScenarioCard: View {
 
 #Preview {
     NavigationStack {
-        ScenarioListView(selectedLevel: .a1, selectedMode: .beginner)
+        ScenarioListView(selectedLevel: .b1, selectedMode: .beginner)
     }
 }

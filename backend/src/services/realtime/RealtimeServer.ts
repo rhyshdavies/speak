@@ -63,10 +63,20 @@ export class RealtimeServer {
       // ElevenLabs Scribe WebSocket
       let scribeSocket: WebSocket | null = null;
       let currentTranscript = '';
+      let scribeConnecting = false;  // Track if connection is in progress
+      let pendingAudioChunks: Buffer[] = [];  // Buffer audio during reconnection
+
+      let cartesiaRetryCount = 0;
+      const MAX_CARTESIA_RETRIES = 3;
 
       const connectCartesia = () => {
+        if (cartesiaRetryCount >= MAX_CARTESIA_RETRIES) {
+          console.log('[Realtime] Cartesia max retries reached, waiting before retry...');
+          return;
+        }
+
         const cartesiaUrl = 'wss://api.cartesia.ai/tts/websocket';
-        console.log('[Realtime] Connecting to Cartesia');
+        console.log('[Realtime] Connecting to Cartesia (attempt ' + (cartesiaRetryCount + 1) + ')');
         cartesiaSocket = new WebSocket(cartesiaUrl, undefined, {
           headers: {
             'X-API-Key': CARTESIA_API_KEY,
@@ -76,6 +86,7 @@ export class RealtimeServer {
 
         cartesiaSocket.on('open', () => {
           console.log('[Realtime] Cartesia TTS connected');
+          cartesiaRetryCount = 0;  // Reset on successful connection
         });
 
         cartesiaSocket.on('message', (data: Buffer) => {
@@ -115,9 +126,10 @@ export class RealtimeServer {
                 state.isPaused = false;
                 console.log('[Realtime] Resumed (TTS complete)');
 
-                // Reconnect Scribe if it disconnected during TTS
+                // Proactively reconnect Scribe if it disconnected during long TTS
+                // This reduces latency - connection starts before user speaks
                 if (!scribeSocket || scribeSocket.readyState !== WebSocket.OPEN) {
-                  console.log('[Realtime] Scribe disconnected, reconnecting...');
+                  console.log('[Realtime] Proactively reconnecting Scribe after TTS');
                   connectScribe();
                 }
               }
@@ -132,6 +144,13 @@ export class RealtimeServer {
         cartesiaSocket.on('error', (err) => {
           console.error('[Realtime] Cartesia error:', err);
           cartesiaSocket = null;
+          cartesiaRetryCount++;
+          // Retry with backoff after error (but not for rate limits)
+          if (err.message?.includes('429')) {
+            console.log('[Realtime] Cartesia rate limited - wait before retrying');
+          } else if (cartesiaRetryCount < MAX_CARTESIA_RETRIES) {
+            setTimeout(() => connectCartesia(), 1000 * cartesiaRetryCount);
+          }
         });
 
         cartesiaSocket.on('close', () => {
@@ -236,42 +255,27 @@ export class RealtimeServer {
             }
 
             if (!hitDelimiter) {
-              // Collect text, stream sentences to TTS as they complete
+              // Collect Spanish text until we hit the delimiter
               pendingText += chunkText;
 
-              // Check if we hit the delimiter
               const delimiterIndex = pendingText.indexOf('|||');
               if (delimiterIndex !== -1) {
-                // Send any remaining text before delimiter
-                const remaining = pendingText.substring(0, delimiterIndex).trim();
-                if (remaining) {
-                  fullResponse += remaining + ' ';
-                  sendToCartesia(remaining);
-                  clientSocket.send(JSON.stringify({
-                    type: 'tutor_text',
-                    text: remaining,
-                    fullText: fullResponse,
-                  }));
-                }
-                console.log(`[Realtime] Hit delimiter at ${Date.now() - streamStartTime}ms, full response: "${fullResponse.substring(0, 50)}..."`);
+                // Got all Spanish text - send to TTS in one request
+                fullResponse = pendingText.substring(0, delimiterIndex).trim();
+                console.log(`[Realtime] Hit delimiter at ${Date.now() - streamStartTime}ms, sending to TTS: "${fullResponse.substring(0, 50)}..."`);
+
+                // Single TTS request - avoids rate limits, Cartesia still streams audio back
+                sendToCartesia(fullResponse);
+
+                // Send text to client
+                clientSocket.send(JSON.stringify({
+                  type: 'tutor_text',
+                  text: fullResponse,
+                  fullText: fullResponse,
+                }));
+
                 jsonBuffer = pendingText.substring(delimiterIndex + 3);
                 hitDelimiter = true;
-              } else {
-                // Stream complete sentences to TTS immediately
-                const sentenceMatch = pendingText.match(/^(.*?[.?!¿¡])\s*/);
-                if (sentenceMatch) {
-                  const sentence = sentenceMatch[1];
-                  fullResponse += sentence + ' ';
-                  sendToCartesia(sentence);
-                  sentenceCount++;
-                  console.log(`[Realtime] Streaming sentence ${sentenceCount} at ${Date.now() - streamStartTime}ms: "${sentence}"`);
-                  clientSocket.send(JSON.stringify({
-                    type: 'tutor_text',
-                    text: sentence,
-                    fullText: fullResponse,
-                  }));
-                  pendingText = pendingText.substring(sentenceMatch[0].length);
-                }
               }
             } else {
               // After delimiter - collect JSON
@@ -373,12 +377,41 @@ export class RealtimeServer {
 
       // ElevenLabs Scribe STT
       const connectScribe = () => {
+        // Prevent duplicate connections
+        if (scribeConnecting) {
+          console.log('[Realtime] Scribe connection already in progress, skipping');
+          return;
+        }
+        scribeConnecting = true;
+
+        // VAD silence threshold based on CEFR level:
+        // - Advanced (B2/C1/C2): 0.4s - Phone call speed, holds the line for natural pauses
+        // - Intermediate (B1): 0.6s - Balanced for developing fluency
+        // - Beginner (A1/A2): 0.8s - Safety net, gives time to breathe and think
+        const getVadSilenceThreshold = (): string => {
+          switch (state.cefrLevel) {
+            case 'B2':
+            case 'C1':
+            case 'C2':
+              return '0.4';  // Advanced: fast, natural conversation flow
+            case 'B1':
+              return '0.6';  // Intermediate: balanced
+            case 'A1':
+            case 'A2':
+            default:
+              return '0.8';  // Beginner: more time to formulate responses
+          }
+        };
+
+        const vadSilenceThreshold = getVadSilenceThreshold();
+        console.log(`[Realtime] VAD silence threshold for ${state.cefrLevel}: ${vadSilenceThreshold}s`);
+
         const params = new URLSearchParams({
           model_id: 'scribe_v2_realtime',
           language_code: 'es',
           audio_format: 'pcm_16000',
           commit_strategy: 'vad',
-          vad_silence_threshold_secs: '0.4',  // Commit after 0.4s of silence (faster)
+          vad_silence_threshold_secs: vadSilenceThreshold,
           vad_threshold: '0.3',  // Slightly higher to avoid false triggers
           min_speech_duration_ms: '100',  // Require 100ms of speech
           min_silence_duration_ms: '150',  // Need 150ms silence to end utterance
@@ -395,6 +428,25 @@ export class RealtimeServer {
 
         scribeSocket.on('open', () => {
           console.log('[Realtime] ElevenLabs Scribe STT connected');
+          scribeConnecting = false;
+
+          // Flush any audio that arrived while reconnecting
+          if (pendingAudioChunks.length > 0) {
+            console.log(`[Realtime] Flushing ${pendingAudioChunks.length} buffered audio chunks`);
+            for (const chunk of pendingAudioChunks) {
+              const audioBase64 = chunk.toString('base64');
+              scribeSocket!.send(
+                JSON.stringify({
+                  message_type: 'input_audio_chunk',
+                  audio_base_64: audioBase64,
+                  sample_rate: 16000,
+                  commit: false,
+                })
+              );
+            }
+            pendingAudioChunks = [];
+          }
+
           // Connect Cartesia after Scribe is ready
           try {
             connectCartesia();
@@ -455,7 +507,8 @@ export class RealtimeServer {
                 })
               );
             } else {
-              console.log(`[Realtime] Scribe message: ${msgType}`, message);
+              // Log ALL message types to debug missing partials
+              console.log(`[Realtime] Scribe message: ${msgType}`, JSON.stringify(message).substring(0, 200));
             }
           } catch (e) {
             console.error('[Realtime] Error parsing Scribe message:', e);
@@ -464,19 +517,18 @@ export class RealtimeServer {
 
         scribeSocket.on('error', (err) => {
           console.error('[Realtime] Scribe error:', err);
+          scribeConnecting = false;
         });
 
         scribeSocket.on('close', (code, reason) => {
           console.log(`[Realtime] Scribe disconnected: ${code} ${reason}`);
-          clientSocket.send(JSON.stringify({
-            type: 'stt_disconnected',
-            message: 'Speech recognition disconnected. Please restart the conversation.'
-          }));
+          scribeSocket = null;
+          scribeConnecting = false;
+          // Will reconnect on-demand when audio arrives
         });
       };
 
-      // Connect to ElevenLabs Scribe when client connects
-      connectScribe();
+      // Note: Scribe connects after 'setup' message to use correct CEFR level for VAD settings
 
       // Handle messages from client
       clientSocket.on('message', (message: Buffer) => {
@@ -492,6 +544,13 @@ export class RealtimeServer {
               console.log(
                 `[Realtime] Setup: scenario=${state.scenario?.type}, level=${state.cefrLevel}`
               );
+              // Connect Scribe AFTER setup so we have the correct CEFR level for VAD settings
+              // Close existing connection if any (in case of reconnect)
+              if (scribeSocket && scribeSocket.readyState === WebSocket.OPEN) {
+                scribeSocket.close();
+                scribeSocket = null;
+              }
+              connectScribe();
               clientSocket.send(JSON.stringify({ type: 'ready' }));
               break;
 
@@ -522,9 +581,31 @@ export class RealtimeServer {
           }
         } catch {
           // Binary audio data - send to ElevenLabs Scribe
-          if (scribeSocket?.readyState === WebSocket.OPEN && !state.isPaused) {
+          // Log every 100th chunk to verify audio is arriving
+          if (Math.random() < 0.01) {
+            console.log(`[Realtime] Audio received: ${message.length} bytes, isPaused=${state.isPaused}`);
+          }
+
+          if (!state.isPaused) {
+            // Reconnect Scribe if needed (on-demand when audio arrives)
+            if (!scribeSocket || scribeSocket.readyState !== WebSocket.OPEN) {
+              // Buffer audio while reconnecting (limit to ~2 seconds of audio at 16kHz)
+              if (pendingAudioChunks.length < 100) {
+                pendingAudioChunks.push(message);
+              }
+              if (!scribeConnecting) {
+                console.log('[Realtime] Scribe not connected, reconnecting on audio...');
+                connectScribe();
+              }
+              return;  // Audio will flush once connected
+            }
+
             // Convert audio to base64 and send in ElevenLabs format
             const audioBase64 = message.toString('base64');
+            // Log every 50th chunk to avoid spam
+            if (Math.random() < 0.02) {
+              console.log(`[Realtime] Audio chunk: ${message.length} bytes`);
+            }
             scribeSocket.send(
               JSON.stringify({
                 message_type: 'input_audio_chunk',

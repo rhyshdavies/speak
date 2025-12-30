@@ -14,7 +14,7 @@ struct PTTButton: View {
 
     @State private var isPressed = false
 
-    private let buttonSize: CGFloat = 100
+    private let buttonSize: CGFloat = 88
 
     /// Whether this is toggle mode (Advanced) vs hold mode (Beginner)
     private var isToggleMode: Bool { mode == .advanced }
@@ -28,15 +28,16 @@ struct PTTButton: View {
 
             // Main button
             Circle()
-                .fill(buttonGradient)
+                .fill(buttonColor)
                 .frame(width: buttonSize, height: buttonSize)
                 .overlay(buttonContent)
                 .scaleEffect(isPressed ? 0.95 : 1.0)
                 .shadow(
                     color: shadowColor,
-                    radius: isRecording ? 20 : 10
+                    radius: isRecording ? 16 : 8,
+                    y: 4
                 )
-                .animation(.easeInOut(duration: 0.1), value: isPressed)
+                .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isPressed)
         }
         .gesture(isToggleMode ? nil : pttGesture)
         .onTapGesture {
@@ -54,33 +55,25 @@ struct PTTButton: View {
     // MARK: - Pulse Ring
 
     private var pulseRing: some View {
-        let pulseScale = 1.0 + CGFloat(audioLevel) * 0.3
+        let pulseScale = 1.0 + CGFloat(audioLevel) * 0.25
         return Circle()
             .fill(Theme.Colors.recordingPulse)
             .frame(
-                width: buttonSize * pulseScale + 40,
-                height: buttonSize * pulseScale + 40
+                width: buttonSize * pulseScale + 32,
+                height: buttonSize * pulseScale + 32
             )
             .animation(.easeInOut(duration: 0.1), value: audioLevel)
     }
 
-    // MARK: - Button Gradient
+    // MARK: - Button Color
 
-    private var buttonGradient: LinearGradient {
+    private var buttonColor: Color {
         if isProcessing {
-            return LinearGradient(
-                colors: [Theme.Colors.surface, Theme.Colors.surfaceSecondary],
-                startPoint: .top,
-                endPoint: .bottom
-            )
+            return Theme.Colors.surfaceSecondary
         } else if isRecording {
-            return LinearGradient(
-                colors: [Theme.Colors.recording, Theme.Colors.recording.opacity(0.8)],
-                startPoint: .top,
-                endPoint: .bottom
-            )
+            return Theme.Colors.recording
         } else {
-            return Theme.Gradients.primaryButton
+            return Theme.Colors.primary
         }
     }
 
@@ -88,9 +81,11 @@ struct PTTButton: View {
 
     private var shadowColor: Color {
         if isRecording {
-            return Theme.Colors.recording.opacity(0.5)
+            return Theme.Colors.recording.opacity(0.3)
+        } else if isProcessing {
+            return Theme.Colors.textPrimary.opacity(0.1)
         } else {
-            return Theme.Colors.primary.opacity(0.5)
+            return Theme.Colors.primary.opacity(0.3)
         }
     }
 
@@ -101,20 +96,20 @@ struct PTTButton: View {
         if isProcessing {
             VStack(spacing: 4) {
                 ProgressView()
-                    .progressViewStyle(CircularProgressViewStyle(tint: Theme.Colors.textPrimary))
+                    .progressViewStyle(CircularProgressViewStyle(tint: Theme.Colors.textSecondary))
                     .scaleEffect(1.2)
 
-                Text("Thinking...")
+                Text("Processing...")
                     .font(Theme.Typography.caption2)
                     .foregroundColor(Theme.Colors.textSecondary)
             }
         } else {
             VStack(spacing: 4) {
                 Image(systemName: isRecording ? "waveform" : "mic.fill")
-                    .font(.system(size: 32, weight: .medium))
+                    .font(.system(size: 28, weight: .medium))
 
                 Text(buttonLabel)
-                    .font(Theme.Typography.caption)
+                    .font(Theme.Typography.caption2)
             }
             .foregroundColor(.white)
         }
@@ -122,7 +117,7 @@ struct PTTButton: View {
 
     private var buttonLabel: String {
         if isToggleMode {
-            return isRecording ? "Tap to Stop" : "Tap to Start"
+            return isRecording ? "Tap to Stop" : "Tap to Talk"
         } else {
             return isRecording ? "Release" : "Hold to Talk"
         }
@@ -149,7 +144,7 @@ struct PTTButton: View {
 
 #Preview("Beginner Mode") {
     ZStack {
-        Theme.Gradients.background
+        Theme.Colors.background
             .ignoresSafeArea()
 
         VStack(spacing: 40) {
@@ -172,32 +167,13 @@ struct PTTButton: View {
                 onPress: {},
                 onRelease: {}
             )
-        }
-    }
-}
 
-#Preview("Advanced Mode") {
-    ZStack {
-        Theme.Gradients.background
-            .ignoresSafeArea()
-
-        VStack(spacing: 40) {
             PTTButton(
-                mode: .advanced,
+                mode: .beginner,
                 isRecording: false,
-                isProcessing: false,
+                isProcessing: true,
                 isLocked: false,
                 audioLevel: 0,
-                onPress: {},
-                onRelease: {}
-            )
-
-            PTTButton(
-                mode: .advanced,
-                isRecording: true,
-                isProcessing: false,
-                isLocked: false,
-                audioLevel: 0.5,
                 onPress: {},
                 onRelease: {}
             )

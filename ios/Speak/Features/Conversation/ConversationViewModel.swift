@@ -54,6 +54,13 @@ final class ConversationViewModel: ObservableObject {
 
     private var cancellables = Set<AnyCancellable>()
 
+    // MARK: - Session Tracking
+
+    private let sessionStartDate = Date()
+    private var turnCount: Int = 0
+    private var didRecordSession: Bool = false
+    private var recordedMessageIds: Set<UUID> = []  // Deduplication for SessionHistory
+
     // MARK: - Initialization
 
     init(
@@ -244,7 +251,7 @@ final class ConversationViewModel: ObservableObject {
         guard mode == .advanced, conversationState == .active else { return }
         guard let realtimeEngine = conversationEngine as? RealtimeEngine else { return }
 
-        realtimeEngine.stopStreaming()
+        realtimeEngine.pause()  // Use pause() instead of stopStreaming() to prevent auto-resume
         isRecording = false
         conversationState = .paused
         HapticManager.lightTap()
@@ -263,6 +270,8 @@ final class ConversationViewModel: ObservableObject {
     func resumeConversation() {
         guard mode == .advanced, conversationState == .paused else { return }
         guard let realtimeEngine = conversationEngine as? RealtimeEngine else { return }
+
+        realtimeEngine.unpause()  // Clear the pause flag first
 
         do {
             try realtimeEngine.startStreaming()
@@ -332,6 +341,20 @@ final class ConversationViewModel: ObservableObject {
                 )
                 messages.append(tutorMessage)
 
+                // Increment turn count
+                turnCount += 1
+
+                // Record to SessionHistory
+                recordTutorMessage(tutorMessage)
+                if let correction = response.tutorResponse.correctionSpanish {
+                    recordCorrection(
+                        original: response.userTranscript,
+                        corrected: correction,
+                        english: response.tutorResponse.correctionEnglish,
+                        messageId: tutorMessage.id
+                    )
+                }
+
                 // Update state
                 suggestedResponses = response.tutorResponse.suggestedResponses
                 scenarioProgress = response.tutorResponse.scenarioProgress
@@ -364,9 +387,31 @@ final class ConversationViewModel: ObservableObject {
         HapticManager.selection()
     }
 
+    // MARK: - Session End
+
+    /// Call this when the user exits the conversation (tap Exit button)
+    /// Only records the session if turnCount >= 2 (prevents "opened app, said nothing" counting)
+    func endSession() {
+        guard !didRecordSession else { return }  // Only record once
+        didRecordSession = true
+
+        // Only count as a session if user had at least 2 turns
+        guard turnCount >= 2 else {
+            print("[Session] Not recording - only \(turnCount) turns (minimum 2 required)")
+            return
+        }
+
+        let durationSeconds = Int(Date().timeIntervalSince(sessionStartDate))
+        StreakManager.shared.recordSession(durationSeconds: durationSeconds)
+        print("[Session] Recorded session: \(turnCount) turns, \(durationSeconds)s duration")
+    }
+
     // MARK: - Cleanup
 
     func cleanup() {
+        // End session before cleanup (in case user force-closes)
+        endSession()
+
         audioRecorder.cleanup()
         audioPlayer.stop()
 
@@ -374,6 +419,33 @@ final class ConversationViewModel: ObservableObject {
         if let realtimeEngine = conversationEngine as? RealtimeEngine {
             realtimeEngine.disconnect()
         }
+    }
+
+    // MARK: - SessionHistory Helpers
+
+    /// Record a tutor message to SessionHistory (with deduplication)
+    private func recordTutorMessage(_ message: ChatMessage) {
+        guard !recordedMessageIds.contains(message.id) else { return }
+        recordedMessageIds.insert(message.id)
+
+        SessionHistory.shared.addTutorMessage(
+            spanish: message.content,
+            english: message.englishText,
+            scenario: scenario.title
+        )
+    }
+
+    /// Record a correction to SessionHistory (with deduplication)
+    private func recordCorrection(original: String, corrected: String, english: String?, messageId: UUID) {
+        guard !recordedMessageIds.contains(messageId) else { return }
+        // Don't insert here - correction shares ID with its message
+
+        SessionHistory.shared.addCorrection(
+            original: original,
+            corrected: corrected,
+            english: english,
+            scenario: scenario.title
+        )
     }
 }
 
@@ -413,6 +485,20 @@ extension ConversationViewModel: RealtimeEngineDelegate {
                     correctionEnglish: response.tutorResponse.correctionEnglish
                 )
                 messages.append(tutorMessage)
+
+                // Increment turn count
+                turnCount += 1
+
+                // Record to SessionHistory
+                recordTutorMessage(tutorMessage)
+                if let correction = response.tutorResponse.correctionSpanish {
+                    recordCorrection(
+                        original: response.userTranscript,
+                        corrected: correction,
+                        english: response.tutorResponse.correctionEnglish,
+                        messageId: tutorMessage.id
+                    )
+                }
             }
 
             // Clear live text

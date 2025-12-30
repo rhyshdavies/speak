@@ -29,11 +29,13 @@ final class RealtimeEngine: NSObject, ConversationEngine {
     private var audioEngine: AVAudioEngine?
     private var isStreaming = false
     private var isTTSPlaying = false  // Pause mic input during TTS to prevent echo
+    private var isPaused = false      // User-initiated pause - don't auto-resume
 
     // Streaming audio playback (TTS output)
     private var playbackEngine: AVAudioEngine?
     private var playerNode: AVAudioPlayerNode?
-    private let playbackFormat = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: 24000, channels: 1, interleaved: true)!
+    // Use Float32 format for AVAudioEngine compatibility (we'll convert from Int16 PCM)
+    private let playbackFormat = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 24000, channels: 1, interleaved: false)!
     private var pendingBufferCount = 0  // Track how many buffers are queued for playback
 
     // Response accumulation
@@ -96,11 +98,46 @@ final class RealtimeEngine: NSObject, ConversationEngine {
     func disconnect() {
         stopStreaming()
         stopPlaybackEngine()
+        isPaused = false  // Reset pause state on disconnect
         webSocket?.cancel(with: .goingAway, reason: nil)
         isConnected = false
     }
 
     // MARK: - Audio Streaming
+
+    /// Configure audio session for both recording and playback
+    private func configureAudioSession() throws {
+        let session = AVAudioSession.sharedInstance()
+        print("[RealtimeEngine] Current session: category=\(session.category.rawValue), mode=\(session.mode.rawValue), isOtherAudioPlaying=\(session.isOtherAudioPlaying)")
+
+        // Deactivate first to reset any conflicting state
+        do {
+            try session.setActive(false, options: .notifyOthersOnDeactivation)
+            print("[RealtimeEngine] Deactivated existing session")
+        } catch {
+            print("[RealtimeEngine] Deactivate failed (ok): \(error.localizedDescription)")
+        }
+
+        // Use playAndRecord with voiceChat mode for echo cancellation
+        // .duckOthers reduces other audio volume instead of blocking activation
+        do {
+            try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.defaultToSpeaker, .allowBluetooth, .duckOthers])
+            print("[RealtimeEngine] Set category success")
+        } catch {
+            print("[RealtimeEngine] Set category FAILED: \(error)")
+            throw error
+        }
+
+        do {
+            try session.setActive(true)
+            print("[RealtimeEngine] Activated session success")
+        } catch {
+            print("[RealtimeEngine] Activate FAILED: \(error)")
+            throw error
+        }
+
+        print("[RealtimeEngine] Audio session configured: \(session.category.rawValue), \(session.mode.rawValue)")
+    }
 
     /// Start streaming audio to the server (for Advanced mode continuous listening)
     func startStreaming() throws {
@@ -114,10 +151,8 @@ final class RealtimeEngine: NSObject, ConversationEngine {
             return
         }
 
-        // Configure audio session
-        let session = AVAudioSession.sharedInstance()
-        try session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetooth])
-        try session.setActive(true)
+        // Configure audio session (idempotent - safe to call multiple times)
+        try configureAudioSession()
 
         // Setup audio engine
         audioEngine = AVAudioEngine()
@@ -161,10 +196,43 @@ final class RealtimeEngine: NSObject, ConversationEngine {
         isStreaming = false
     }
 
+    /// Pause streaming - user initiated, won't auto-resume after TTS
+    func pause() {
+        isPaused = true
+        stopStreaming()
+        print("[RealtimeEngine] Paused by user")
+    }
+
+    /// Unpause streaming - resume after user-initiated pause
+    func unpause() {
+        isPaused = false
+        print("[RealtimeEngine] Unpaused by user")
+    }
+
     /// Resume mic input after TTS playback finishes (call from ViewModel after audio player completes)
     func resumeAfterPlayback() {
         isTTSPlaying = false
-        print("[RealtimeEngine] Playback complete, resuming mic input")
+        print("[RealtimeEngine] Playback complete")
+
+        // Stop playback engine to free up audio resources
+        stopPlaybackEngine()
+        print("[RealtimeEngine] Playback engine stopped")
+
+        // Don't auto-resume if user has paused the conversation
+        if isPaused {
+            print("[RealtimeEngine] User paused - not auto-resuming mic")
+            return
+        }
+
+        // Restart recording completely - playback may have disrupted it
+        print("[RealtimeEngine] Restarting recording engine after playback...")
+        stopStreaming()
+        do {
+            try startStreaming()
+            print("[RealtimeEngine] Recording engine restarted successfully")
+        } catch {
+            print("[RealtimeEngine] Failed to restart recording: \(error)")
+        }
 
         // Also send resume to server
         guard let webSocket = webSocket, isConnected else { return }
@@ -500,6 +568,14 @@ final class RealtimeEngine: NSObject, ConversationEngine {
     private func setupPlaybackEngine() {
         guard playbackEngine == nil else { return }
 
+        // Ensure audio session is configured for playback
+        do {
+            try configureAudioSession()
+        } catch {
+            print("[RealtimeEngine] Failed to configure audio session: \(error)")
+            return
+        }
+
         playbackEngine = AVAudioEngine()
         playerNode = AVAudioPlayerNode()
 
@@ -526,7 +602,7 @@ final class RealtimeEngine: NSObject, ConversationEngine {
             return
         }
 
-        // Convert Data to AVAudioPCMBuffer
+        // Convert Int16 PCM data to Float32 for AVAudioEngine
         let frameCount = UInt32(data.count / 2)  // 2 bytes per Int16 sample
         guard let buffer = AVAudioPCMBuffer(pcmFormat: playbackFormat, frameCapacity: frameCount) else {
             print("[RealtimeEngine] Failed to create audio buffer")
@@ -534,10 +610,13 @@ final class RealtimeEngine: NSObject, ConversationEngine {
         }
         buffer.frameLength = frameCount
 
-        // Copy data into buffer
+        // Convert Int16 samples to Float32
         data.withUnsafeBytes { rawBuffer in
-            if let src = rawBuffer.baseAddress {
-                memcpy(buffer.int16ChannelData![0], src, data.count)
+            let int16Ptr = rawBuffer.bindMemory(to: Int16.self)
+            guard let floatChannel = buffer.floatChannelData?[0] else { return }
+            for i in 0..<Int(frameCount) {
+                // Convert Int16 (-32768 to 32767) to Float32 (-1.0 to 1.0)
+                floatChannel[i] = Float(int16Ptr[i]) / 32768.0
             }
         }
 

@@ -34,6 +34,26 @@ const CEFR_VOCABULARY_GUIDELINES: Record<CEFRLevel, string> = {
 - Cultural references with explanation
 - Formal and informal registers
 - Idiomatic language`,
+
+  C1: `Use advanced vocabulary and sophisticated structures:
+- Precise vocabulary including academic and professional terms
+- All tenses and moods with full subjunctive mastery
+- Complex hypothetical constructions
+- Regional variations and colloquialisms
+- Subtle shades of meaning and implication
+- Literary and journalistic register
+- Proverbs and cultural references without explanation
+- Long, multi-clause sentences with varied structure`,
+
+  C2: `Use native-level vocabulary and mastery:
+- Full range of idiomatic, colloquial, and formal language
+- Rare vocabulary, archaisms, and neologisms as appropriate
+- Regional dialects and sociolects
+- Wordplay, double meanings, and rhetorical devices
+- Cultural and historical allusions
+- Specialized terminology from any field
+- Complete stylistic flexibility across all registers
+- No simplification - speak as to a native speaker`,
 };
 
 const JSON_SCHEMA = `{
@@ -73,13 +93,16 @@ Example response:
 Hola, me llamo María. ¿Cómo te llamas?|||{"tutorEnglish":"Hello, my name is María. What is your name?","correctionSpanish":null,"correctionEnglish":null,"suggestedResponses":["Me llamo...","Soy...","Mi nombre es..."]}
 
 ## Guidelines
-1. Stay in character as ${scenario.tutorRole}
-2. Keep Spanish responses natural and conversational
-3. Use vocabulary STRICTLY appropriate for ${cefrLevel} level
-4. ALWAYS end with a question to keep conversation flowing
-5. If user makes errors, include correction in JSON
-6. suggestedResponses: 2-3 things user might say next (in Spanish)
-7. tutorEnglish: ALWAYS include English translation
+1. Stay in character as ${scenario.tutorRole} - NEVER break character
+2. Keep ALL conversation focused on the scenario: ${scenario.setting}
+3. Guide the user through the learning objectives - do NOT go off-topic
+4. Use vocabulary STRICTLY appropriate for ${cefrLevel} level
+5. Keep Spanish responses natural and conversational
+6. ALWAYS end with a question related to the scenario to keep conversation flowing
+7. If user makes errors, include correction in JSON
+8. suggestedResponses: 2-3 things user might say next (in Spanish, relevant to the scenario)
+9. tutorEnglish: ALWAYS include English translation
+10. If user tries to change topic, gently steer back to the scenario objectives
 
 ## Another Example
 ¿De dónde eres? Me gusta mucho tu acento.|||{"tutorEnglish":"Where are you from? I really like your accent.","correctionSpanish":null,"correctionEnglish":null,"suggestedResponses":["Soy de...","Vengo de...","Mi país es..."]}`;

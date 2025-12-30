@@ -28,7 +28,7 @@ struct RootView: View {
                 )
             }
         }
-        .preferredColorScheme(.dark)
+        .preferredColorScheme(.light) // Warm modernity theme uses light mode
     }
 }
 

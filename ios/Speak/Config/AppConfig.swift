@@ -35,13 +35,25 @@ enum AppConfig {
 
     #if DEBUG
     /// Local development server (use Mac's IP for physical device testing)
-    static let backendBaseURL = "http://192.168.1.147:3000"
-    static let webSocketURL = "ws://192.168.1.147:8080"
+    static let backendBaseURL = "http://192.168.1.162:3000"
+    static let webSocketURL = "ws://192.168.1.162:8080"
     #else
     /// Production deployment
     static let backendBaseURL = "https://speak-api.vercel.app"
     static let webSocketURL = "wss://speak-api.vercel.app/ws"
     #endif
+
+    // MARK: - API Keys (for direct API calls)
+
+    /// OpenAI API key for pronunciation transcription
+    /// Set via environment variable OPENAI_API_KEY or replace with your key
+    static let openAIAPIKey: String = {
+        if let key = ProcessInfo.processInfo.environment["OPENAI_API_KEY"] {
+            return key
+        }
+        // Fallback - replace with actual key or leave empty to disable feature
+        return ""
+    }()
 
     // MARK: - Feature Flags
 

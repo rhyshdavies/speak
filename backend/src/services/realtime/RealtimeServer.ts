@@ -1,6 +1,7 @@
 import { WebSocket, WebSocketServer } from 'ws';
+import type { Server as HttpServer } from 'http';
 import Groq from 'groq-sdk';
-import { buildSystemPrompt } from '../../prompts/system-prompts.js';
+import { buildRealtimePrompt } from '../../prompts/system-prompts.js';
 import type { ScenarioContext, CEFRLevel } from '../../types/index.js';
 
 // Configuration
@@ -30,12 +31,12 @@ export class RealtimeServer {
   private wss: WebSocketServer;
   private groq: Groq;
 
-  constructor(port: number = 8080) {
-    // Bind to 0.0.0.0 for IPv4 (required for iOS devices)
-    this.wss = new WebSocketServer({ port, host: '0.0.0.0' });
+  constructor(server: HttpServer) {
+    // Attach WebSocket to existing HTTP server (shares port with Express)
+    this.wss = new WebSocketServer({ server });
     this.groq = new Groq({ apiKey: GROQ_API_KEY });
     this.setupServer();
-    console.log(`🚀 Realtime WebSocket Server running on port ${port}`);
+    console.log(`🚀 Realtime WebSocket Server attached to HTTP server`);
     console.log(`   Advanced Mode: Real-time streaming enabled`);
     console.log(`   STT: ElevenLabs Scribe v2 Realtime`);
     console.log(`   LLM: Groq Llama 3.3 70B`);
@@ -202,7 +203,7 @@ export class RealtimeServer {
         console.log(`[Realtime] User said: "${transcript}" (processing started)`);
         console.log(`[Realtime] Conversation history has ${state.conversationHistory.length} messages`);
 
-        const systemPrompt = buildSystemPrompt(state.scenario, state.cefrLevel);
+        const systemPrompt = buildRealtimePrompt(state.scenario, state.cefrLevel);
 
         // Build messages for Groq (OpenAI-compatible format)
         const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
@@ -299,7 +300,7 @@ export class RealtimeServer {
             const fallbackResponse = '¿Puedes repetir, por favor?';
             fullResponse = fallbackResponse;
             sendToCartesia(fallbackResponse);
-            jsonBuffer = '{"tutorEnglish":"Can you repeat, please?","correctionSpanish":null,"correctionEnglish":null,"suggestedResponses":["Sí","No","Otra vez"]}';
+            jsonBuffer = '{"tutorEnglish":"Can you repeat, please?","correctionSpanish":null,"correctionEnglish":null,"correctionExplanation":null,"suggestedResponses":["Sí","No","Otra vez"]}';
             clientSocket.send(JSON.stringify({
               type: 'tutor_text',
               text: fallbackResponse,
@@ -320,6 +321,7 @@ export class RealtimeServer {
             tutorEnglish: '',
             correctionSpanish: null,
             correctionEnglish: null,
+            correctionExplanation: null,
             suggestedResponses: ['Sí', 'No', '¿Por qué?'],
           };
 
@@ -331,9 +333,10 @@ export class RealtimeServer {
               tutorEnglish: englishText,
               correctionSpanish: parsed.correctionSpanish || null,
               correctionEnglish: parsed.correctionEnglish || null,
+              correctionExplanation: parsed.correctionExplanation || null,
               suggestedResponses: parsed.suggestedResponses || ['Sí', 'No', '¿Por qué?'],
             };
-            console.log(`[Realtime] Parsed JSON - English: "${englishText}"`);
+            console.log(`[Realtime] Parsed JSON - English: "${englishText}"${parsed.correctionExplanation ? ', has explanation' : ''}`);
           } catch (parseError) {
             // Try to extract English with regex
             const englishMatch = jsonBuffer.match(/"tutorEnglish"\s*:\s*"((?:[^"\\]|\\.)*)"/);

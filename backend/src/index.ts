@@ -2,6 +2,7 @@
 import 'dotenv/config';
 
 import express from 'express';
+import { createServer } from 'http';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
@@ -9,6 +10,7 @@ import conversationRouter from './routes/conversation.js';
 import { RealtimeServer } from './services/realtime/RealtimeServer.js';
 
 const app = express();
+const server = createServer(app);
 const PORT = process.env.PORT || 3000;
 
 // Security middleware
@@ -59,7 +61,7 @@ app.get('/', (req, res) => {
     endpoints: {
       health: 'GET /health',
       conversationTurn: 'POST /api/conversation/turn (Beginner Mode)',
-      realtimeWebSocket: 'ws://localhost:8080 (Advanced Mode)',
+      realtimeWebSocket: 'ws://<host>:<port> (Advanced Mode - same port as REST)',
     },
   });
 });
@@ -77,29 +79,25 @@ app.use(
   }
 );
 
-// Start REST server (Beginner Mode) - bind to all interfaces for iOS simulator access
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`\n📱 Speak Backend Started`);
-  console.log(`════════════════════════════════════════`);
-  console.log(`🐢 Beginner Mode (REST): http://localhost:${PORT}`);
-  console.log(`   └─ Turn-based conversation (~2.6s latency)`);
-  console.log(`   └─ POST /api/conversation/turn`);
-});
-
-// Start WebSocket server (Advanced Mode) - only if ElevenLabs key is set
-const WS_PORT = 8080;
+// Start WebSocket server (Advanced Mode) - attach to HTTP server if ElevenLabs key is set
 if (process.env.ELEVEN_LABS_API_KEY) {
   try {
-    new RealtimeServer(WS_PORT);
-    console.log(`\n⚡ Advanced Mode (WebSocket): ws://localhost:${WS_PORT}`);
-    console.log(`   └─ Real-time streaming (sub-500ms latency)`);
-    console.log(`   └─ ElevenLabs Scribe → Gemini → Cartesia pipeline`);
+    new RealtimeServer(server);
+    console.log(`⚡ Advanced Mode (WebSocket): Enabled on same port`);
   } catch (error) {
-    console.log(`\n⚠️  Advanced Mode disabled (WebSocket server failed to start)`);
+    console.log(`⚠️  Advanced Mode disabled (WebSocket server failed to start)`);
   }
 } else {
-  console.log(`\n⚠️  Advanced Mode disabled (ELEVEN_LABS_API_KEY not set)`);
+  console.log(`⚠️  Advanced Mode disabled (ELEVEN_LABS_API_KEY not set)`);
 }
-console.log(`════════════════════════════════════════\n`);
+
+// Start HTTP server (serves both REST and WebSocket on same port)
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`\n📱 Speak Backend Started on port ${PORT}`);
+  console.log(`════════════════════════════════════════`);
+  console.log(`🐢 Beginner Mode (REST): http://localhost:${PORT}`);
+  console.log(`⚡ Advanced Mode (WebSocket): ws://localhost:${PORT}`);
+  console.log(`════════════════════════════════════════\n`);
+});
 
 export default app;

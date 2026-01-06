@@ -9,8 +9,8 @@ enum ConversationMode: String, CaseIterable, Identifiable {
 
     var displayName: String {
         switch self {
-        case .beginner: return "Beginner Mode"
-        case .advanced: return "Advanced Mode"
+        case .beginner: return "Beginner (Turn by Turn)"
+        case .advanced: return "Advanced (Full Conversation)"
         }
     }
 
@@ -35,12 +35,12 @@ enum AppConfig {
 
     #if DEBUG
     /// Local development server (use Mac's IP for physical device testing)
-    static let backendBaseURL = "http://192.168.1.162:3000"
-    static let webSocketURL = "ws://192.168.1.162:8080"
+    static let backendBaseURL = "http://172.20.10.11:3000"
+    static let webSocketURL = "ws://172.20.10.11:3000"
     #else
-    /// Production deployment
-    static let backendBaseURL = "https://speak-api.vercel.app"
-    static let webSocketURL = "wss://speak-api.vercel.app/ws"
+    /// Production deployment (Railway)
+    static let backendBaseURL = "https://speak-production.up.railway.app"
+    static let webSocketURL = "wss://speak-production.up.railway.app"
     #endif
 
     // MARK: - API Keys (for direct API calls)

@@ -11,7 +11,7 @@ import { RealtimeServer } from './services/realtime/RealtimeServer.js';
 
 const app = express();
 const server = createServer(app);
-const PORT = process.env.PORT || 3000;
+const PORT = parseInt(process.env.PORT || '3000', 10);
 
 // Security middleware
 app.use(helmet());

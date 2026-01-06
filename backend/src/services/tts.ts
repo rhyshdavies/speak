@@ -27,8 +27,8 @@ export async function synthesizeSpeech(text: string): Promise<Buffer> {
 
   const audioStream = await client.textToSpeech.convert(voiceId, {
     text,
-    model_id: 'eleven_flash_v2_5',
-    output_format: 'mp3_22050_32',
+    modelId: 'eleven_flash_v2_5',
+    outputFormat: 'mp3_22050_32',
   });
 
   // Convert stream to buffer

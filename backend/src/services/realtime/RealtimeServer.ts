@@ -142,7 +142,7 @@ export class RealtimeServer {
           }
         });
 
-        cartesiaSocket.on('error', (err) => {
+        cartesiaSocket.on('error', (err: Error) => {
           console.error('[Realtime] Cartesia error:', err);
           cartesiaSocket = null;
           cartesiaRetryCount++;
@@ -518,12 +518,12 @@ export class RealtimeServer {
           }
         });
 
-        scribeSocket.on('error', (err) => {
+        scribeSocket.on('error', (err: Error) => {
           console.error('[Realtime] Scribe error:', err);
           scribeConnecting = false;
         });
 
-        scribeSocket.on('close', (code, reason) => {
+        scribeSocket.on('close', (code: number, reason: Buffer) => {
           console.log(`[Realtime] Scribe disconnected: ${code} ${reason}`);
           scribeSocket = null;
           scribeConnecting = false;
@@ -628,7 +628,7 @@ export class RealtimeServer {
         cartesiaSocket?.close();
       });
 
-      clientSocket.on('error', (err) => {
+      clientSocket.on('error', (err: Error) => {
         console.error('[Realtime] Client error:', err);
       });
     });

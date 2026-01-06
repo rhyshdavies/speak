@@ -39,8 +39,8 @@ enum AppConfig {
     static let webSocketURL = "ws://172.20.10.11:3000"
     #else
     /// Production deployment (Railway)
-    static let backendBaseURL = "https://speak-production.up.railway.app"
-    static let webSocketURL = "wss://speak-production.up.railway.app"
+    static let backendBaseURL = "https://speak-production-ed85.up.railway.app"
+    static let webSocketURL = "wss://speak-production-ed85.up.railway.app"
     #endif
 
     // MARK: - API Keys (for direct API calls)

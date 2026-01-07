@@ -222,11 +222,11 @@ struct PaywallView: View {
     // MARK: - Price Helpers
 
     private var monthlyPriceString: String {
-        revenueCat.monthlyPackage?.localizedPriceString ?? "$4.99"
+        revenueCat.monthlyPackage?.localizedPriceString ?? "$9.99"
     }
 
     private var yearlyPriceString: String {
-        revenueCat.annualPackage?.localizedPriceString ?? "$39.99"
+        revenueCat.annualPackage?.localizedPriceString ?? "$59.99"
     }
 
     private var savingsText: String? {

@@ -98,9 +98,9 @@ class Offering {
         return Package(
             identifier: "speak_premium_monthly",
             packageType: .monthly,
-            localizedPriceString: "$4.99",
+            localizedPriceString: "$9.99",
             product: StoreProduct(
-                pricePerMonth: 4.99,
+                pricePerMonth: 9.99,
                 introDiscount: nil
             )
         )
@@ -110,9 +110,9 @@ class Offering {
         return Package(
             identifier: "speak_premium_yearly",
             packageType: .annual,
-            localizedPriceString: "$39.99",
+            localizedPriceString: "$59.99",
             product: StoreProduct(
-                pricePerMonth: 3.33,
+                pricePerMonth: 4.99,
                 introDiscount: IntroductoryDiscount(
                     period: SubscriptionPeriod(value: 7, unit: .day)
                 )

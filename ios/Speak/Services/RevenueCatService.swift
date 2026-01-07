@@ -13,9 +13,9 @@ final class RevenueCatService: ObservableObject {
     /// Your RevenueCat public API key (replace with your actual key)
     private let apiKey = "your_revenuecat_api_key_here"
 
-    // Product identifiers
-    static let monthlyProductID = "speak_premium_monthly"
-    static let yearlyProductID = "speak_premium_yearly"
+    // Product identifiers (must match App Store Connect)
+    static let monthlyProductID = "com.rhyshdavies.speak.premium.monthly"
+    static let yearlyProductID = "com.rhyshdavies.speak.premium.annual"
 
     // Entitlement identifier
     static let premiumEntitlement = "premium"

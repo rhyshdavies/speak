@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		0109F9B3A36EE1DCDB137AC7 /* TurnResponse.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8AEE8EC277FB3791F4CD6677 /* TurnResponse.swift */; };
+		LANG111122223333444455LB /* Language.swift in Sources */ = {isa = PBXBuildFile; fileRef = LANG111122223333444455LF /* Language.swift */; };
 		1122334455667788990011AA /* ReviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2233445566778899001122BB /* ReviewView.swift */; };
 		182AA5DE6E35863F2C32DD8F /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F2CD05981A0F6E4EC881E73 /* Theme.swift */; };
 		22950C341AC0E9C740252169 /* CEFRLevel.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC3BBB1ADAF738854F3A3A51 /* CEFRLevel.swift */; };
@@ -63,6 +64,7 @@
 		C8053313733A8336111B4F82 /* Speak.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Speak.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		C8C45ABCDD5D7384F4FBE269 /* HapticManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HapticManager.swift; sourceTree = "<group>"; };
 		CC3BBB1ADAF738854F3A3A51 /* CEFRLevel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CEFRLevel.swift; sourceTree = "<group>"; };
+		LANG111122223333444455LF /* Language.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Language.swift; sourceTree = "<group>"; };
 		CD211C85B7BA20A3209F9E05 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
 		D2A5208FEF6E7219C655641A /* ConversationViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationViewModel.swift; sourceTree = "<group>"; };
 		DD44EE55FF66778899AABB11 /* SessionHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionHistory.swift; sourceTree = "<group>"; };
@@ -162,6 +164,7 @@
 			children = (
 				CC3BBB1ADAF738854F3A3A51 /* CEFRLevel.swift */,
 				3CD38983EA6FD8584D4C7ABD /* ChatMessage.swift */,
+				LANG111122223333444455LF /* Language.swift */,
 				AAB058A7B467CA48B37D68C4 /* Scenario.swift */,
 				8AEE8EC277FB3791F4CD6677 /* TurnResponse.swift */,
 			);
@@ -298,6 +301,7 @@
 				E021366DE4CA52D7C0E2EEDB /* AudioRecorderService.swift in Sources */,
 				22950C341AC0E9C740252169 /* CEFRLevel.swift in Sources */,
 				E9C35AF379448D336DEE91EE /* ChatMessage.swift in Sources */,
+				LANG111122223333444455LB /* Language.swift in Sources */,
 				9A915275BD19054C9CC7265D /* ConversationEngine.swift in Sources */,
 				C30FB90B21A065D378CB18D0 /* ConversationView.swift in Sources */,
 				23E52CE1F40E0AA9D81BDBBC /* ConversationViewModel.swift in Sources */,
@@ -399,7 +403,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.speak.app;
+				PRODUCT_BUNDLE_IDENTIFIER = com.rhyshdavies.speak;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -483,7 +487,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.speak.app;
+				PRODUCT_BUNDLE_IDENTIFIER = com.rhyshdavies.speak;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};

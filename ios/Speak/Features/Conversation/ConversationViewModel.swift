@@ -43,6 +43,7 @@ final class ConversationViewModel: ObservableObject {
 
     private let scenario: ScenarioContext
     private let cefrLevel: CEFRLevel
+    private let language: Language
     private let conversationEngine: ConversationEngine
     private let audioRecorder: AudioRecorderService
     private let audioPlayer: AudioPlayerService
@@ -62,12 +63,14 @@ final class ConversationViewModel: ObservableObject {
     init(
         scenario: ScenarioContext,
         cefrLevel: CEFRLevel,
+        language: Language = .spanish,
         conversationEngine: ConversationEngine? = nil,
         audioRecorder: AudioRecorderService? = nil,
         audioPlayer: AudioPlayerService? = nil
     ) {
         self.scenario = scenario
         self.cefrLevel = cefrLevel
+        self.language = language
 
         // Always use RealtimeEngine for real-time streaming
         self.conversationEngine = conversationEngine ?? RealtimeEngine()
@@ -117,8 +120,8 @@ final class ConversationViewModel: ObservableObject {
     private func addInitialGreeting() {
         let greeting = ChatMessage(
             role: .assistant,
-            content: "Ready to practice \(scenario.title)?",
-            englishText: "Tap the button below to start a real-time conversation. I'll play the role of \(scenario.tutorRole)."
+            content: "Ready to practice \(scenario.title) in \(language.displayName)?",
+            englishText: "Tap the button below to start a real-time conversation. I'll play the role of \(scenario.tutorRole) and we'll speak in \(language.displayName)."
         )
         messages.append(greeting)
     }
@@ -181,7 +184,7 @@ final class ConversationViewModel: ObservableObject {
             do {
                 print("[ConversationVM] Connecting to server...")
                 // Connect to server if needed
-                try await realtimeEngine.connect(scenario: scenario, cefrLevel: cefrLevel)
+                try await realtimeEngine.connect(scenario: scenario, cefrLevel: cefrLevel, language: language)
                 print("[ConversationVM] Connected! Starting streaming...")
 
                 // Start streaming audio

@@ -1,7 +1,7 @@
 import { WebSocket, WebSocketServer } from 'ws';
 import type { Server as HttpServer } from 'http';
 import Groq from 'groq-sdk';
-import { buildRealtimePrompt } from '../../prompts/system-prompts.js';
+import { buildRealtimePrompt, getFallbackPhrases, type Language } from '../../prompts/system-prompts.js';
 import type { ScenarioContext, CEFRLevel } from '../../types/index.js';
 
 // Configuration
@@ -9,14 +9,25 @@ const ELEVENLABS_API_KEY = process.env.ELEVEN_LABS_API_KEY!;
 const GROQ_API_KEY = process.env.GROQ_API_KEY!;
 const CARTESIA_API_KEY = process.env.CARTESIA_API_KEY!;
 
-// Spanish voice for Cartesia Sonic-3
-const CARTESIA_VOICE_ID = 'c0c374aa-09be-42d9-9828-4d2d7df86962';
+// Voice IDs for each language (Cartesia Sonic-3)
+const CARTESIA_VOICE_IDS: Record<Language, string> = {
+  es: 'c0c374aa-09be-42d9-9828-4d2d7df86962', // Spanish female
+  fr: '8e24a5c8-df2f-4d15-8c95-72a8e8b1ce93', // French female
+  de: '8e24a5c8-df2f-4d15-8c95-72a8e8b1ce93', // German (fallback to multilingual)
+  it: '8e24a5c8-df2f-4d15-8c95-72a8e8b1ce93', // Italian (fallback to multilingual)
+  pt: '8e24a5c8-df2f-4d15-8c95-72a8e8b1ce93', // Portuguese (fallback to multilingual)
+  ja: '8e24a5c8-df2f-4d15-8c95-72a8e8b1ce93', // Japanese (fallback to multilingual)
+  ko: '8e24a5c8-df2f-4d15-8c95-72a8e8b1ce93', // Korean (fallback to multilingual)
+  zh: '8e24a5c8-df2f-4d15-8c95-72a8e8b1ce93', // Mandarin (fallback to multilingual)
+  ar: '8e24a5c8-df2f-4d15-8c95-72a8e8b1ce93', // Arabic (fallback to multilingual)
+};
 
 interface SessionState {
   isPaused: boolean;
   speechRate: number;
   scenario: ScenarioContext | null;
   cefrLevel: CEFRLevel;
+  language: Language;
   conversationHistory: Array<{ role: string; content: string }>;
 }
 
@@ -25,6 +36,7 @@ interface ClientMessage {
   speechRate?: number;
   scenario?: ScenarioContext;
   cefrLevel?: CEFRLevel;
+  language?: Language;
 }
 
 export class RealtimeServer {
@@ -52,6 +64,7 @@ export class RealtimeServer {
         speechRate: 0.0,
         scenario: null,
         cefrLevel: 'A1',
+        language: 'es',
         conversationHistory: [],
       };
 
@@ -181,9 +194,9 @@ export class RealtimeServer {
           transcript: text,
           voice: {
             mode: 'id',
-            id: CARTESIA_VOICE_ID,
+            id: CARTESIA_VOICE_IDS[state.language] || CARTESIA_VOICE_IDS.es,
           },
-          language: 'es',
+          language: state.language,
           output_format: {
             container: 'raw',
             encoding: 'pcm_s16le',
@@ -203,7 +216,7 @@ export class RealtimeServer {
         console.log(`[Realtime] User said: "${transcript}" (processing started)`);
         console.log(`[Realtime] Conversation history has ${state.conversationHistory.length} messages`);
 
-        const systemPrompt = buildRealtimePrompt(state.scenario, state.cefrLevel);
+        const systemPrompt = buildRealtimePrompt(state.scenario, state.cefrLevel, state.language);
 
         // Build messages for Groq (OpenAI-compatible format)
         const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
@@ -295,12 +308,19 @@ export class RealtimeServer {
             }));
           }
 
-          // Fallback if no Spanish text was generated
+          // Fallback if no response text was generated
           if (fullResponse.trim().length === 0) {
-            const fallbackResponse = '¿Puedes repetir, por favor?';
+            const fallback = getFallbackPhrases(state.language);
+            const fallbackResponse = fallback.askRepeat;
             fullResponse = fallbackResponse;
             sendToCartesia(fallbackResponse);
-            jsonBuffer = '{"tutorEnglish":"Can you repeat, please?","correctionSpanish":null,"correctionEnglish":null,"correctionExplanation":null,"suggestedResponses":["Sí","No","Otra vez"]}';
+            jsonBuffer = JSON.stringify({
+              tutorEnglish: 'Can you repeat, please?',
+              correctionTarget: null,
+              correctionEnglish: null,
+              correctionExplanation: null,
+              suggestedResponses: fallback.responses,
+            });
             clientSocket.send(JSON.stringify({
               type: 'tutor_text',
               text: fallbackResponse,
@@ -316,13 +336,14 @@ export class RealtimeServer {
 
           // Parse JSON metadata
           let englishText = '';
+          const defaultResponses = getFallbackPhrases(state.language).responses;
           let response: any = {
             tutorSpanish: fullResponse,
             tutorEnglish: '',
             correctionSpanish: null,
             correctionEnglish: null,
             correctionExplanation: null,
-            suggestedResponses: ['Sí', 'No', '¿Por qué?'],
+            suggestedResponses: defaultResponses,
           };
 
           try {
@@ -411,7 +432,7 @@ export class RealtimeServer {
 
         const params = new URLSearchParams({
           model_id: 'scribe_v2_realtime',
-          language_code: 'es',
+          language_code: state.language,
           audio_format: 'pcm_16000',
           commit_strategy: 'vad',
           vad_silence_threshold_secs: vadSilenceThreshold,
@@ -543,9 +564,10 @@ export class RealtimeServer {
             case 'setup':
               if (event.scenario) state.scenario = event.scenario;
               if (event.cefrLevel) state.cefrLevel = event.cefrLevel;
+              if (event.language) state.language = event.language;
               state.conversationHistory = [];
               console.log(
-                `[Realtime] Setup: scenario=${state.scenario?.type}, level=${state.cefrLevel}`
+                `[Realtime] Setup: scenario=${state.scenario?.type}, level=${state.cefrLevel}, language=${state.language}`
               );
               // Connect Scribe AFTER setup so we have the correct CEFR level for VAD settings
               // Close existing connection if any (in case of reconnect)

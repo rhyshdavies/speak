@@ -28,6 +28,7 @@ struct SpeakApp: App {
 struct RootView: View {
     @EnvironmentObject var subscriptionManager: SubscriptionManager
     @State private var selectedLevel: CEFRLevel = .a1
+    @State private var selectedLanguage: Language = .spanish
     @State private var showingScenarios = false
     @State private var showingPaywall = false
     @State private var paywallTrigger: PaywallTrigger?
@@ -36,6 +37,7 @@ struct RootView: View {
         NavigationStack {
             HomeView(
                 selectedLevel: $selectedLevel,
+                selectedLanguage: $selectedLanguage,
                 showingScenarios: $showingScenarios,
                 showPaywall: { trigger in
                     paywallTrigger = trigger
@@ -45,6 +47,7 @@ struct RootView: View {
             .navigationDestination(isPresented: $showingScenarios) {
                 ScenarioListView(
                     selectedLevel: selectedLevel,
+                    selectedLanguage: selectedLanguage,
                     showPaywall: { trigger in
                         paywallTrigger = trigger
                         showingPaywall = true

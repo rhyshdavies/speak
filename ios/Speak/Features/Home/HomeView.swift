@@ -3,6 +3,7 @@ import SwiftUI
 /// Home screen with greeting, hero card, quick actions, and recent scenarios
 struct HomeView: View {
     @Binding var selectedLevel: CEFRLevel
+    @Binding var selectedLanguage: Language
     @Binding var showingScenarios: Bool
     var showPaywall: (PaywallTrigger) -> Void
 
@@ -18,10 +19,11 @@ struct HomeView: View {
 
     private var greeting: String {
         let hour = Calendar.current.component(.hour, from: Date())
+        let greetings = selectedLanguage.greeting
         switch hour {
-        case 5..<12: return "Buenos días"
-        case 12..<18: return "Buenas tardes"
-        default: return "Buenas noches"
+        case 5..<12: return greetings.morning
+        case 12..<18: return greetings.afternoon
+        default: return greetings.evening
         }
     }
 
@@ -80,47 +82,58 @@ struct HomeView: View {
     // MARK: - Header
 
     private var headerSection: some View {
-        HStack(alignment: .center) {
-            VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-                Text("\(greeting),")
-                    .font(Theme.Typography.title2)
-                    .foregroundColor(Theme.Colors.textPrimary)
+        VStack(spacing: Theme.Spacing.md) {
+            // Top row: Greeting and settings
+            HStack(alignment: .center) {
+                VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+                    Text("\(greeting),")
+                        .font(Theme.Typography.title2)
+                        .foregroundColor(Theme.Colors.textPrimary)
 
-                Text(userName)
-                    .font(Theme.Typography.title)
-                    .foregroundColor(Theme.Colors.textPrimary)
+                    Text(userName)
+                        .font(Theme.Typography.title)
+                        .foregroundColor(Theme.Colors.textPrimary)
+                }
+
+                Spacer()
+
+                // Streak chip - tappable
+                Button {
+                    HapticManager.selection()
+                    showingProgress = true
+                } label: {
+                    StreakChipView(
+                        count: streakManager.currentStreak,
+                        isActive: streakManager.practicedToday
+                    )
+                }
+
+                // Settings gear
+                Button {
+                    HapticManager.selection()
+                    showingSettings = true
+                } label: {
+                    Image(systemName: "gearshape.fill")
+                        .font(.title3)
+                        .foregroundColor(Theme.Colors.textSecondary)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
             }
 
-            Spacer()
+            // Bottom row: Language and Level selectors
+            HStack(spacing: Theme.Spacing.sm) {
+                // Language selector
+                LanguageSelectorChip(selectedLanguage: $selectedLanguage)
 
-            // Level selector chip
-            LevelSelectorChip(
-                selectedLevel: $selectedLevel,
-                tier: subscriptionManager.tier,
-                showPaywall: showPaywall
-            )
-
-            // Streak chip - tappable
-            Button {
-                HapticManager.selection()
-                showingProgress = true
-            } label: {
-                StreakChipView(
-                    count: streakManager.currentStreak,
-                    isActive: streakManager.practicedToday
+                // Level selector
+                LevelSelectorChip(
+                    selectedLevel: $selectedLevel,
+                    tier: subscriptionManager.tier,
+                    showPaywall: showPaywall
                 )
-            }
 
-            // Settings gear
-            Button {
-                HapticManager.selection()
-                showingSettings = true
-            } label: {
-                Image(systemName: "gearshape.fill")
-                    .font(.title3)
-                    .foregroundColor(Theme.Colors.textSecondary)
-                    .frame(width: 44, height: 44)
-                    .contentShape(Rectangle())
+                Spacer()
             }
         }
         .padding(.top, Theme.Spacing.md)
@@ -345,6 +358,59 @@ struct LevelSelectorChip: View {
     }
 }
 
+// MARK: - Language Selector Chip
+
+struct LanguageSelectorChip: View {
+    @Binding var selectedLanguage: Language
+
+    var body: some View {
+        Menu {
+            ForEach(Language.allCases) { language in
+                Button {
+                    HapticManager.selection()
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        selectedLanguage = language
+                    }
+                } label: {
+                    HStack {
+                        Text("\(language.flag) \(language.displayName)")
+
+                        Spacer()
+
+                        if language == selectedLanguage {
+                            Image(systemName: "checkmark")
+                        }
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: Theme.Spacing.xs) {
+                Text(selectedLanguage.flag)
+                    .font(.title3)
+
+                Text(selectedLanguage.displayName)
+                    .fontWeight(.semibold)
+                    .foregroundColor(Theme.Colors.textPrimary)
+
+                Image(systemName: "chevron.down")
+                    .font(.caption2)
+                    .fontWeight(.semibold)
+                    .foregroundColor(Theme.Colors.textSecondary)
+            }
+            .font(Theme.Typography.subheadline)
+            .padding(.horizontal, Theme.Spacing.md)
+            .padding(.vertical, Theme.Spacing.sm)
+            .background(Theme.Colors.surface)
+            .clipShape(Capsule())
+            .shadow(
+                color: Theme.Shadows.small.color,
+                radius: Theme.Shadows.small.radius,
+                y: Theme.Shadows.small.y
+            )
+        }
+    }
+}
+
 // MARK: - Streak Chip View
 
 struct StreakChipView: View {
@@ -465,6 +531,7 @@ struct RecentScenarioCard: View {
     NavigationStack {
         HomeView(
             selectedLevel: .constant(.a1),
+            selectedLanguage: .constant(.spanish),
             showingScenarios: .constant(false),
             showPaywall: { _ in }
         )

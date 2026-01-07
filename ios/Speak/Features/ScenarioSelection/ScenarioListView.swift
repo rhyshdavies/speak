@@ -3,6 +3,7 @@ import SwiftUI
 /// List of available scenarios in a 2-column grid
 struct ScenarioListView: View {
     let selectedLevel: CEFRLevel
+    let selectedLanguage: Language
     var showPaywall: (PaywallTrigger) -> Void
 
     @EnvironmentObject var subscriptionManager: SubscriptionManager
@@ -81,7 +82,8 @@ struct ScenarioListView: View {
             if let scenario = selectedScenario {
                 ConversationView(
                     scenario: scenario,
-                    cefrLevel: selectedLevel
+                    cefrLevel: selectedLevel,
+                    language: selectedLanguage
                 )
             }
         }
@@ -91,8 +93,21 @@ struct ScenarioListView: View {
 
     private var headerSection: some View {
         VStack(spacing: Theme.Spacing.md) {
-            // Level and Mode badges
-            HStack(spacing: Theme.Spacing.md) {
+            // Language, Level, and Mode badges
+            HStack(spacing: Theme.Spacing.sm) {
+                // Language badge
+                HStack(spacing: Theme.Spacing.xs) {
+                    Text(selectedLanguage.flag)
+                    Text(selectedLanguage.displayName)
+                        .fontWeight(.medium)
+                }
+                .font(Theme.Typography.caption)
+                .foregroundColor(Theme.Colors.textPrimary)
+                .padding(.horizontal, Theme.Spacing.sm)
+                .padding(.vertical, Theme.Spacing.xs)
+                .background(Theme.Colors.surface)
+                .clipShape(Capsule())
+
                 LevelBadge(level: selectedLevel)
                 LiveBadge()
             }
@@ -213,6 +228,7 @@ struct ScenarioGridCard: View {
     NavigationStack {
         ScenarioListView(
             selectedLevel: .b1,
+            selectedLanguage: .spanish,
             showPaywall: { _ in }
         )
         .environmentObject(SubscriptionManager.shared)

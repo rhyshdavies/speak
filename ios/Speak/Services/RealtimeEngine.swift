@@ -24,6 +24,7 @@ final class RealtimeEngine: NSObject, ConversationEngine {
     private var isConnected = false
     private var scenario: ScenarioContext?
     private var cefrLevel: CEFRLevel = .a1
+    private var language: Language = .spanish
 
     // Audio streaming (mic input)
     private var audioEngine: AVAudioEngine?
@@ -66,7 +67,7 @@ final class RealtimeEngine: NSObject, ConversationEngine {
 
     // MARK: - Connection Management
 
-    func connect(scenario: ScenarioContext, cefrLevel: CEFRLevel) async throws {
+    func connect(scenario: ScenarioContext, cefrLevel: CEFRLevel, language: Language) async throws {
         // Guard against double-connection - if already connected or connecting, just return
         if isConnected {
             print("[RealtimeEngine] Already connected, skipping")
@@ -79,6 +80,7 @@ final class RealtimeEngine: NSObject, ConversationEngine {
 
         self.scenario = scenario
         self.cefrLevel = cefrLevel
+        self.language = language
 
         print("[RealtimeEngine] Connecting to: \(AppConfig.webSocketURL)")
 
@@ -316,7 +318,8 @@ final class RealtimeEngine: NSObject, ConversationEngine {
                 "tutorRole": scenario.tutorRole,
                 "objectives": scenario.objectives
             ],
-            "cefrLevel": cefrLevel.rawValue
+            "cefrLevel": cefrLevel.rawValue,
+            "language": language.rawValue
         ]
 
         guard let data = try? JSONSerialization.data(withJSONObject: setupMessage) else {
@@ -343,7 +346,7 @@ final class RealtimeEngine: NSObject, ConversationEngine {
     ) async throws -> TurnResponse {
         // Connect if not already connected
         if !isConnected {
-            try await connect(scenario: context, cefrLevel: cefrLevel)
+            try await connect(scenario: context, cefrLevel: cefrLevel, language: language)
         }
 
         // Reset state for new turn

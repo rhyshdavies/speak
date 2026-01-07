@@ -4,6 +4,7 @@ import SwiftUI
 struct ConversationView: View {
     let scenario: ScenarioContext
     let cefrLevel: CEFRLevel
+    let language: Language
 
     @EnvironmentObject var subscriptionManager: SubscriptionManager
     @StateObject private var viewModel: ConversationViewModel
@@ -12,12 +13,14 @@ struct ConversationView: View {
     @State private var showKeyPhrases: Bool = false
     @State private var showPaywall: Bool = false
 
-    init(scenario: ScenarioContext, cefrLevel: CEFRLevel) {
+    init(scenario: ScenarioContext, cefrLevel: CEFRLevel, language: Language = .spanish) {
         self.scenario = scenario
         self.cefrLevel = cefrLevel
+        self.language = language
         _viewModel = StateObject(wrappedValue: ConversationViewModel(
             scenario: scenario,
-            cefrLevel: cefrLevel
+            cefrLevel: cefrLevel,
+            language: language
         ))
     }
 

@@ -1,23 +1,23 @@
 import SwiftUI
 
-/// Main conversation screen with unified UI for Beginner and Advanced modes
+/// Main conversation screen with real-time Advanced mode
 struct ConversationView: View {
     let scenario: ScenarioContext
     let cefrLevel: CEFRLevel
-    let mode: ConversationMode
 
+    @EnvironmentObject var subscriptionManager: SubscriptionManager
     @StateObject private var viewModel: ConversationViewModel
+    @ObservedObject private var history = SessionHistory.shared
     @Environment(\.dismiss) private var dismiss
     @State private var showKeyPhrases: Bool = false
+    @State private var showPaywall: Bool = false
 
-    init(scenario: ScenarioContext, cefrLevel: CEFRLevel, mode: ConversationMode = .beginner) {
+    init(scenario: ScenarioContext, cefrLevel: CEFRLevel) {
         self.scenario = scenario
         self.cefrLevel = cefrLevel
-        self.mode = mode
         _viewModel = StateObject(wrappedValue: ConversationViewModel(
             scenario: scenario,
-            cefrLevel: cefrLevel,
-            mode: mode
+            cefrLevel: cefrLevel
         ))
     }
 
@@ -33,8 +33,8 @@ struct ConversationView: View {
                 // Messages
                 messagesSection
 
-                // Live transcript line (Advanced mode only)
-                if mode == .advanced && !viewModel.liveTranscript.isEmpty {
+                // Live transcript line
+                if !viewModel.liveTranscript.isEmpty {
                     liveTranscriptLine
                 }
 
@@ -69,7 +69,7 @@ struct ConversationView: View {
                         .font(Theme.Typography.headline)
                         .foregroundColor(Theme.Colors.textPrimary)
 
-                    if mode == .advanced && viewModel.conversationState == .active {
+                    if viewModel.conversationState == .active {
                         LiveBadge()
                     }
                 }
@@ -106,6 +106,9 @@ struct ConversationView: View {
         }
         .onDisappear {
             viewModel.cleanup()
+        }
+        .sheet(isPresented: $showPaywall) {
+            PaywallView(trigger: .feedbackLocked)
         }
     }
 
@@ -144,19 +147,17 @@ struct ConversationView: View {
             ScrollView {
                 LazyVStack(spacing: Theme.Spacing.md) {
                     ForEach(viewModel.messages) { message in
-                        MessageBubble(message: message, showTranslation: viewModel.showTranslations)
+                        messageBubble(for: message)
                             .id(message.id)
                     }
 
-                    // Live tutor response (Advanced mode - streaming)
-                    if mode == .advanced && !viewModel.liveTutorText.isEmpty {
+                    // Live tutor response (streaming)
+                    if !viewModel.liveTutorText.isEmpty {
                         liveTutorBubble
                     }
 
                     // Status indicator
-                    if mode == .advanced {
-                        statusIndicator
-                    }
+                    statusIndicator
 
                     // Bottom anchor
                     Color.clear
@@ -298,20 +299,7 @@ struct ConversationView: View {
 
     private var bottomControls: some View {
         VStack(spacing: Theme.Spacing.md) {
-            // Unified PTT button for both modes
-            if mode == .advanced {
-                advancedModeControls
-            } else {
-                PTTButton(
-                    mode: mode,
-                    isRecording: viewModel.isRecording,
-                    isProcessing: viewModel.isProcessing,
-                    isLocked: viewModel.isLocked,
-                    audioLevel: viewModel.audioLevel,
-                    onPress: viewModel.startRecording,
-                    onRelease: viewModel.stopRecordingAndSend
-                )
-            }
+            advancedModeControls
         }
         .padding(.horizontal, Theme.Spacing.lg)
         .padding(.bottom, Theme.Spacing.xl)
@@ -450,6 +438,42 @@ struct ConversationView: View {
                 .clipShape(Capsule())
         }
     }
+
+    // MARK: - Helpers
+
+    /// Build a message bubble for a given message
+    @ViewBuilder
+    private func messageBubble(for message: ChatMessage) -> some View {
+        let spanish = message.spanishText ?? ""
+        let isSaved = isPhraseStarred(spanish: spanish)
+
+        MessageBubble(
+            message: message,
+            showTranslation: viewModel.showTranslations,
+            tier: subscriptionManager.tier,
+            onPaywallTrigger: { showPaywall = true },
+            onSavePhrase: { sp, en in
+                toggleSavePhrase(spanish: sp, english: en)
+            },
+            isSaved: isSaved
+        )
+    }
+
+    /// Check if a phrase is already saved
+    private func isPhraseStarred(spanish: String) -> Bool {
+        history.savedPhrases.contains { $0.spanish == spanish }
+    }
+
+    /// Toggle save state for a phrase
+    private func toggleSavePhrase(spanish: String, english: String) {
+        if isPhraseStarred(spanish: spanish) {
+            if let phrase = history.savedPhrases.first(where: { $0.spanish == spanish }) {
+                history.removePhrase(phrase)
+            }
+        } else {
+            history.savePhrase(spanish: spanish, english: english)
+        }
+    }
 }
 
 // MARK: - Key Phrases Sheet
@@ -578,6 +602,7 @@ struct KeyPhraseRow: View {
 
 #Preview {
     NavigationStack {
-        ConversationView(scenario: .restaurant, cefrLevel: .a1, mode: .beginner)
+        ConversationView(scenario: .restaurant, cefrLevel: .a1)
+            .environmentObject(SubscriptionManager.shared)
     }
 }

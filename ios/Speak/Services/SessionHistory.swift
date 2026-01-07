@@ -29,11 +29,12 @@ final class SessionHistory: ObservableObject {
     // MARK: - Public Methods
 
     /// Add a correction from a session
-    func addCorrection(original: String, corrected: String, english: String?, scenario: String) {
+    func addCorrection(original: String, corrected: String, english: String?, explanation: String?, scenario: String) {
         let correction = SavedCorrection(
             original: original,
             corrected: corrected,
             english: english,
+            explanation: explanation,
             scenario: scenario,
             date: Date()
         )
@@ -90,6 +91,20 @@ final class SessionHistory: ObservableObject {
         saveToDefaults()
     }
 
+    /// Get unique recent scenario titles (from tutor messages)
+    var recentScenarioTitles: [String] {
+        var seen = Set<String>()
+        var result: [String] = []
+        for message in recentTutorMessages {
+            if !seen.contains(message.scenario) {
+                seen.insert(message.scenario)
+                result.append(message.scenario)
+            }
+            if result.count >= 5 { break }
+        }
+        return result
+    }
+
     // MARK: - Private Methods
 
     private func loadFromDefaults() {
@@ -129,14 +144,16 @@ struct SavedCorrection: Identifiable, Codable {
     let original: String
     let corrected: String
     let english: String?
+    let explanation: String?
     let scenario: String
     let date: Date
 
-    init(original: String, corrected: String, english: String?, scenario: String, date: Date) {
+    init(original: String, corrected: String, english: String?, explanation: String?, scenario: String, date: Date) {
         self.id = UUID()
         self.original = original
         self.corrected = corrected
         self.english = english
+        self.explanation = explanation
         self.scenario = scenario
         self.date = date
     }

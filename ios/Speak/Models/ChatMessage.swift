@@ -14,6 +14,8 @@ struct ChatMessage: Identifiable, Codable, Equatable {
     /// Correction if user made an error
     var correctionSpanish: String?
     var correctionEnglish: String?
+    /// Explanation of why the error is wrong (grammar rule)
+    var correctionExplanation: String?
 
     enum MessageRole: String, Codable {
         case user
@@ -29,7 +31,8 @@ struct ChatMessage: Identifiable, Codable, Equatable {
         spanishText: String? = nil,
         englishText: String? = nil,
         correctionSpanish: String? = nil,
-        correctionEnglish: String? = nil
+        correctionEnglish: String? = nil,
+        correctionExplanation: String? = nil
     ) {
         self.id = id
         self.role = role
@@ -39,6 +42,7 @@ struct ChatMessage: Identifiable, Codable, Equatable {
         self.englishText = englishText
         self.correctionSpanish = correctionSpanish
         self.correctionEnglish = correctionEnglish
+        self.correctionExplanation = correctionExplanation
     }
 
     /// Create a user message from transcript
@@ -51,14 +55,15 @@ struct ChatMessage: Identifiable, Codable, Equatable {
     }
 
     /// Create a tutor message from response
-    static func tutorMessage(spanish: String, english: String, correction: String? = nil, correctionEnglish: String? = nil) -> ChatMessage {
+    static func tutorMessage(spanish: String, english: String, correction: String? = nil, correctionEnglish: String? = nil, correctionExplanation: String? = nil) -> ChatMessage {
         ChatMessage(
             role: .assistant,
             content: spanish,
             spanishText: spanish,
             englishText: english,
             correctionSpanish: correction,
-            correctionEnglish: correctionEnglish
+            correctionEnglish: correctionEnglish,
+            correctionExplanation: correctionExplanation
         )
     }
 }

@@ -19,6 +19,7 @@ struct TutorResponseJSON: Codable {
     let tutorEnglish: String
     let correctionSpanish: String?
     let correctionEnglish: String?
+    let correctionExplanation: String?
     let hint: String?
     let vocabularySpotlight: VocabularySpotlight?
     let scenarioProgress: ScenarioProgress

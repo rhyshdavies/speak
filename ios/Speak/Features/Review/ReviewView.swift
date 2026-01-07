@@ -2,14 +2,21 @@ import SwiftUI
 
 /// Review screen showing corrections, saved phrases, and tutor highlights
 struct ReviewView: View {
+    @EnvironmentObject var subscriptionManager: SubscriptionManager
     @ObservedObject var history = SessionHistory.shared
     @Environment(\.dismiss) private var dismiss
     @State private var selectedTab: ReviewTab = .corrections
+    @State private var showPaywall: Bool = false
 
     enum ReviewTab: String, CaseIterable {
         case corrections = "Corrections"
         case saved = "Saved"
         case recent = "Recent"
+    }
+
+    /// Item limit based on tier (nil = unlimited)
+    private var itemLimit: Int? {
+        FeatureAccess.reviewItemLimit(for: subscriptionManager.tier)
     }
 
     var body: some View {
@@ -135,22 +142,81 @@ struct ReviewView: View {
             LazyVStack(spacing: Theme.Spacing.md) {
                 switch selectedTab {
                 case .corrections:
-                    ForEach(history.recentCorrections) { correction in
+                    let items = limitedItems(history.recentCorrections)
+                    ForEach(items) { correction in
                         CorrectionCard(correction: correction)
                     }
+                    if hasMoreItems(history.recentCorrections) {
+                        unlockMoreButton(total: history.recentCorrections.count)
+                    }
                 case .saved:
-                    ForEach(history.savedPhrases) { phrase in
+                    let items = limitedItems(history.savedPhrases)
+                    ForEach(items) { phrase in
                         SavedPhraseCard(phrase: phrase) {
                             history.removePhrase(phrase)
                         }
                     }
+                    if hasMoreItems(history.savedPhrases) {
+                        unlockMoreButton(total: history.savedPhrases.count)
+                    }
                 case .recent:
-                    ForEach(history.recentTutorMessages) { message in
+                    let items = limitedItems(history.recentTutorMessages)
+                    ForEach(items) { message in
                         TutorMessageCard(message: message)
+                    }
+                    if hasMoreItems(history.recentTutorMessages) {
+                        unlockMoreButton(total: history.recentTutorMessages.count)
                     }
                 }
             }
             .padding(Theme.Spacing.md)
+        }
+        .sheet(isPresented: $showPaywall) {
+            PaywallView(trigger: .reviewLimitReached)
+        }
+    }
+
+    // MARK: - Item Limiting
+
+    private func limitedItems<T>(_ items: [T]) -> ArraySlice<T> {
+        if let limit = itemLimit {
+            return items.prefix(limit)
+        }
+        return items[...]
+    }
+
+    private func hasMoreItems<T>(_ items: [T]) -> Bool {
+        guard let limit = itemLimit else { return false }
+        return items.count > limit
+    }
+
+    private func unlockMoreButton(total: Int) -> some View {
+        Button {
+            showPaywall = true
+        } label: {
+            HStack(spacing: Theme.Spacing.sm) {
+                Image(systemName: "lock.fill")
+                    .font(.caption)
+                Text("See all \(total) items")
+                    .font(Theme.Typography.subheadline)
+                Text("Premium")
+                    .font(Theme.Typography.caption)
+                    .fontWeight(.semibold)
+                    .padding(.horizontal, Theme.Spacing.sm)
+                    .padding(.vertical, Theme.Spacing.xxs)
+                    .background(Theme.Colors.primary.opacity(0.15))
+                    .clipShape(Capsule())
+            }
+            .foregroundColor(Theme.Colors.primary)
+            .frame(maxWidth: .infinity)
+            .padding(Theme.Spacing.md)
+            .background(Theme.Colors.surface)
+            .clipShape(RoundedRectangle(cornerRadius: Theme.CornerRadius.lg))
+            .shadow(
+                color: Theme.Shadows.small.color,
+                radius: Theme.Shadows.small.radius,
+                y: Theme.Shadows.small.y
+            )
         }
     }
 }
@@ -195,6 +261,28 @@ struct CorrectionCard: View {
                         .foregroundColor(Theme.Colors.textSecondary)
                         .italic()
                 }
+            }
+
+            // Explanation (Why?)
+            if let explanation = correction.explanation {
+                VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+                    HStack(spacing: Theme.Spacing.xs) {
+                        Image(systemName: "lightbulb.fill")
+                            .foregroundColor(Theme.Colors.primary)
+                            .font(.caption)
+                        Text("Why?")
+                            .font(Theme.Typography.caption)
+                            .foregroundColor(Theme.Colors.primary)
+                    }
+
+                    Text(explanation)
+                        .font(Theme.Typography.caption)
+                        .foregroundColor(Theme.Colors.textSecondary)
+                        .lineSpacing(2)
+                }
+                .padding(Theme.Spacing.sm)
+                .background(Theme.Colors.primary.opacity(0.08))
+                .clipShape(RoundedRectangle(cornerRadius: Theme.CornerRadius.sm))
             }
 
             // Scenario badge
@@ -305,4 +393,5 @@ struct TutorMessageCard: View {
 
 #Preview {
     ReviewView()
+        .environmentObject(SubscriptionManager.shared)
 }

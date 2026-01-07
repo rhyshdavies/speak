@@ -3,17 +3,18 @@ import SwiftUI
 /// Home screen with greeting, hero card, quick actions, and recent scenarios
 struct HomeView: View {
     @Binding var selectedLevel: CEFRLevel
-    @Binding var selectedMode: ConversationMode
     @Binding var showingScenarios: Bool
+    var showPaywall: (PaywallTrigger) -> Void
 
+    @EnvironmentObject var subscriptionManager: SubscriptionManager
     @ObservedObject private var streakManager = StreakManager.shared
+    @ObservedObject private var sessionHistory = SessionHistory.shared
     @State private var userName: String = "Learner"
-    @State private var recentScenarios: [ScenarioContext] = [.greetings, .restaurant, .cafe]
 
     // Sheet states
     @State private var showingProgress: Bool = false
     @State private var showingReview: Bool = false
-    @State private var showingPronunciation: Bool = false
+    @State private var showingSettings: Bool = false
 
     private var greeting: String {
         let hour = Calendar.current.component(.hour, from: Date())
@@ -21,6 +22,13 @@ struct HomeView: View {
         case 5..<12: return "Buenos días"
         case 12..<18: return "Buenas tardes"
         default: return "Buenas noches"
+        }
+    }
+
+    /// Recent scenarios the user has actually practiced
+    private var recentScenarios: [ScenarioContext] {
+        return sessionHistory.recentScenarioTitles.compactMap { title in
+            ScenarioContext.allScenarios.first { $0.title == title }
         }
     }
 
@@ -39,9 +47,6 @@ struct HomeView: View {
 
                     // Quick Actions
                     quickActionsSection
-
-                    // Level & Mode Selection
-                    settingsSection
 
                     // Jump Back In
                     if !recentScenarios.isEmpty {
@@ -64,8 +69,11 @@ struct HomeView: View {
         .sheet(isPresented: $showingReview) {
             ReviewView()
         }
-        .sheet(isPresented: $showingPronunciation) {
-            PronunciationWarmupView(level: selectedLevel)
+        .sheet(isPresented: $showingSettings) {
+            SettingsView(
+                selectedLevel: $selectedLevel,
+                showPaywall: showPaywall
+            )
         }
     }
 
@@ -85,6 +93,13 @@ struct HomeView: View {
 
             Spacer()
 
+            // Level selector chip
+            LevelSelectorChip(
+                selectedLevel: $selectedLevel,
+                tier: subscriptionManager.tier,
+                showPaywall: showPaywall
+            )
+
             // Streak chip - tappable
             Button {
                 HapticManager.selection()
@@ -94,6 +109,18 @@ struct HomeView: View {
                     count: streakManager.currentStreak,
                     isActive: streakManager.practicedToday
                 )
+            }
+
+            // Settings gear
+            Button {
+                HapticManager.selection()
+                showingSettings = true
+            } label: {
+                Image(systemName: "gearshape.fill")
+                    .font(.title3)
+                    .foregroundColor(Theme.Colors.textSecondary)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
         }
         .padding(.top, Theme.Spacing.md)
@@ -114,9 +141,7 @@ struct HomeView: View {
 
                     Spacer()
 
-                    if selectedMode == .advanced {
-                        LiveBadge()
-                    }
+                    LiveBadge()
                 }
 
                 // Scenario info
@@ -134,7 +159,7 @@ struct HomeView: View {
                 // Badges
                 HStack(spacing: Theme.Spacing.md) {
                     LevelBadge(level: selectedLevel)
-                    DurationBadge(minutes: 5)
+                    PracticeLimitBadge(tier: subscriptionManager.tier, usedToday: subscriptionManager.practicesToday)
 
                     Spacer()
 
@@ -145,20 +170,34 @@ struct HomeView: View {
                 }
 
                 // CTA Button
-                PrimaryButton("Start", icon: "play.fill") {
-                    HapticManager.mediumTap()
-                    showingScenarios = true
+                if subscriptionManager.canStartPractice() {
+                    PrimaryButton("Start", icon: "play.fill") {
+                        HapticManager.mediumTap()
+                        showingScenarios = true
+                    }
+                    .padding(.top, Theme.Spacing.sm)
+                } else {
+                    VStack(spacing: Theme.Spacing.sm) {
+                        PrimaryButton("Start", icon: "play.fill", isDisabled: true) {}
+                            .padding(.top, Theme.Spacing.sm)
+
+                        Button {
+                            showPaywall(.practiceLimit)
+                        } label: {
+                            Text("Unlock unlimited practice")
+                                .font(Theme.Typography.caption)
+                                .foregroundColor(Theme.Colors.primary)
+                        }
+                    }
                 }
-                .padding(.top, Theme.Spacing.sm)
             }
             .padding(Theme.Spacing.lg)
         }
     }
 
     private var suggestedScenario: ScenarioContext {
-        // Get appropriate scenarios for level and return the first one (more predictable)
-        let appropriate = ScenarioContext.scenarios(for: selectedLevel)
-        return appropriate.first ?? .greetings
+        // Daily pinning: same scenario all day, rotates tomorrow
+        subscriptionManager.pinnedScenario(for: selectedLevel)
     }
 
     // MARK: - Quick Actions
@@ -172,8 +211,17 @@ struct HomeView: View {
             HStack(spacing: Theme.Spacing.md) {
                 QuickActionButton(
                     icon: "bubble.left.and.bubble.right",
-                    title: "Free Chat",
+                    title: "Chat",
                     color: Theme.Colors.success
+                ) {
+                    HapticManager.mediumTap()
+                    showingScenarios = true
+                }
+
+                QuickActionButton(
+                    icon: "theatermasks",
+                    title: "Scenarios",
+                    color: Theme.Colors.primary
                 ) {
                     HapticManager.mediumTap()
                     showingScenarios = true
@@ -187,96 +235,6 @@ struct HomeView: View {
                     HapticManager.selection()
                     showingReview = true
                 }
-
-                QuickActionButton(
-                    icon: "waveform",
-                    title: "Pronounce",
-                    color: Theme.Colors.primary
-                ) {
-                    HapticManager.selection()
-                    showingPronunciation = true
-                }
-            }
-        }
-    }
-
-    // MARK: - Settings Section
-
-    private var settingsSection: some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.md) {
-            Text("Settings")
-                .font(Theme.Typography.headline)
-                .foregroundColor(Theme.Colors.textPrimary)
-
-            Card {
-                VStack(spacing: Theme.Spacing.md) {
-                    // Level picker
-                    SettingsRow(
-                        icon: "chart.bar.fill",
-                        title: "Level",
-                        value: selectedLevel.displayName
-                    ) {
-                        Menu {
-                            ForEach(CEFRLevel.allCases) { level in
-                                Button {
-                                    HapticManager.selection()
-                                    selectedLevel = level
-                                } label: {
-                                    HStack {
-                                        Text(level.displayName)
-                                        if selectedLevel == level {
-                                            Image(systemName: "checkmark")
-                                        }
-                                    }
-                                }
-                            }
-                        } label: {
-                            HStack(spacing: Theme.Spacing.xs) {
-                                Text(selectedLevel.rawValue)
-                                    .font(Theme.Typography.headline)
-                                    .foregroundColor(Theme.Colors.primary)
-                                Image(systemName: "chevron.down")
-                                    .font(.caption)
-                                    .foregroundColor(Theme.Colors.primary)
-                            }
-                        }
-                    }
-
-                    Divider()
-
-                    // Mode picker
-                    SettingsRow(
-                        icon: selectedMode.icon,
-                        title: "Mode",
-                        value: selectedMode.displayName
-                    ) {
-                        Menu {
-                            ForEach(ConversationMode.allCases) { mode in
-                                Button {
-                                    HapticManager.selection()
-                                    selectedMode = mode
-                                } label: {
-                                    HStack {
-                                        Text(mode.displayName)
-                                        if selectedMode == mode {
-                                            Image(systemName: "checkmark")
-                                        }
-                                    }
-                                }
-                            }
-                        } label: {
-                            HStack(spacing: Theme.Spacing.xs) {
-                                Text(selectedMode.displayName)
-                                    .font(Theme.Typography.headline)
-                                    .foregroundColor(Theme.Colors.primary)
-                                Image(systemName: "chevron.down")
-                                    .font(.caption)
-                                    .foregroundColor(Theme.Colors.primary)
-                            }
-                        }
-                    }
-                }
-                .padding(Theme.Spacing.md)
             }
         }
     }
@@ -311,6 +269,78 @@ struct HomeView: View {
                     }
                 }
             }
+        }
+    }
+}
+
+// MARK: - Level Selector Chip
+
+struct LevelSelectorChip: View {
+    @Binding var selectedLevel: CEFRLevel
+    let tier: SubscriptionTier
+    var showPaywall: (PaywallTrigger) -> Void
+
+    private let levels: [CEFRLevel] = CEFRLevel.allCases
+
+    var body: some View {
+        Menu {
+            levelButton(for: .a1)
+            levelButton(for: .a2)
+            levelButton(for: .b1)
+            levelButton(for: .b2)
+            levelButton(for: .c1)
+            levelButton(for: .c2)
+        } label: {
+            HStack(spacing: Theme.Spacing.xs) {
+                Text(selectedLevel.rawValue)
+                    .fontWeight(.bold)
+                    .foregroundColor(Theme.Colors.primary)
+
+                Image(systemName: "chevron.down")
+                    .font(.caption2)
+                    .fontWeight(.semibold)
+                    .foregroundColor(Theme.Colors.primary.opacity(0.7))
+            }
+            .font(Theme.Typography.subheadline)
+            .padding(.horizontal, Theme.Spacing.md)
+            .padding(.vertical, Theme.Spacing.sm)
+            .background(Theme.Colors.primary.opacity(0.12))
+            .clipShape(Capsule())
+        }
+    }
+
+    @ViewBuilder
+    private func levelButton(for level: CEFRLevel) -> some View {
+        Button {
+            HapticManager.selection()
+            if level.requiresPremium && tier == .free {
+                showPaywall(.levelLocked)
+            } else {
+                selectedLevel = level
+            }
+        } label: {
+            HStack {
+                Text("\(level.rawValue) – \(levelName(for: level))")
+
+                Spacer()
+
+                if level == selectedLevel {
+                    Image(systemName: "checkmark")
+                } else if level.requiresPremium && tier == .free {
+                    Image(systemName: "lock.fill")
+                }
+            }
+        }
+    }
+
+    private func levelName(for level: CEFRLevel) -> String {
+        switch level {
+        case .a1: return "Beginner"
+        case .a2: return "Elementary"
+        case .b1: return "Intermediate"
+        case .b2: return "Upper Intermediate"
+        case .c1: return "Advanced"
+        case .c2: return "Mastery"
         }
     }
 }
@@ -386,39 +416,6 @@ struct QuickActionButton: View {
     }
 }
 
-// MARK: - Settings Row
-
-struct SettingsRow<Content: View>: View {
-    let icon: String
-    let title: String
-    let value: String
-    let content: Content
-
-    init(icon: String, title: String, value: String, @ViewBuilder content: () -> Content) {
-        self.icon = icon
-        self.title = title
-        self.value = value
-        self.content = content()
-    }
-
-    var body: some View {
-        HStack {
-            Image(systemName: icon)
-                .font(.body)
-                .foregroundColor(Theme.Colors.primary)
-                .frame(width: 28)
-
-            Text(title)
-                .font(Theme.Typography.body)
-                .foregroundColor(Theme.Colors.textPrimary)
-
-            Spacer()
-
-            content
-        }
-    }
-}
-
 // MARK: - Recent Scenario Card
 
 struct RecentScenarioCard: View {
@@ -468,8 +465,9 @@ struct RecentScenarioCard: View {
     NavigationStack {
         HomeView(
             selectedLevel: .constant(.a1),
-            selectedMode: .constant(.beginner),
-            showingScenarios: .constant(false)
+            showingScenarios: .constant(false),
+            showPaywall: { _ in }
         )
+        .environmentObject(SubscriptionManager.shared)
     }
 }

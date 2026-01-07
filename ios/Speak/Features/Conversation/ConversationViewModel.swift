@@ -35,19 +35,14 @@ final class ConversationViewModel: ObservableObject {
     @Published private(set) var conversationState: ConversationState = .idle
 
     /// Combined state lock - true when user cannot interact
-    /// In Advanced mode, we don't lock during processing since it's continuous
     var isLocked: Bool {
-        if mode == .advanced {
-            return audioPlayer.isPlaying
-        }
-        return isProcessing || audioPlayer.isPlaying
+        return audioPlayer.isPlaying
     }
 
     // MARK: - Dependencies
 
     private let scenario: ScenarioContext
     private let cefrLevel: CEFRLevel
-    private let mode: ConversationMode
     private let conversationEngine: ConversationEngine
     private let audioRecorder: AudioRecorderService
     private let audioPlayer: AudioPlayerService
@@ -59,33 +54,23 @@ final class ConversationViewModel: ObservableObject {
     private let sessionStartDate = Date()
     private var turnCount: Int = 0
     private var didRecordSession: Bool = false
-    private var recordedMessageIds: Set<UUID> = []  // Deduplication for SessionHistory
+    private var recordedMessageIds: Set<UUID> = []  // Deduplication for tutor messages
+    private var recordedCorrectionIds: Set<UUID> = []  // Deduplication for corrections
 
     // MARK: - Initialization
 
     init(
         scenario: ScenarioContext,
         cefrLevel: CEFRLevel,
-        mode: ConversationMode = .beginner,
         conversationEngine: ConversationEngine? = nil,
         audioRecorder: AudioRecorderService? = nil,
         audioPlayer: AudioPlayerService? = nil
     ) {
         self.scenario = scenario
         self.cefrLevel = cefrLevel
-        self.mode = mode
 
-        // Select engine based on mode
-        if let engine = conversationEngine {
-            self.conversationEngine = engine
-        } else {
-            switch mode {
-            case .beginner:
-                self.conversationEngine = OpenAIBasicEngine()
-            case .advanced:
-                self.conversationEngine = RealtimeEngine()
-            }
-        }
+        // Always use RealtimeEngine for real-time streaming
+        self.conversationEngine = conversationEngine ?? RealtimeEngine()
 
         self.audioRecorder = audioRecorder ?? AudioRecorderService()
         self.audioPlayer = audioPlayer ?? AudioPlayerService()
@@ -130,38 +115,25 @@ final class ConversationViewModel: ObservableObject {
     }
 
     private func addInitialGreeting() {
-        let modeDescription = mode == .advanced
-            ? "Using real-time mode for faster responses."
-            : "Using turn-based mode."
-
         let greeting = ChatMessage(
             role: .assistant,
             content: "Ready to practice \(scenario.title)?",
-            englishText: "Hold the button below and speak in Spanish. I'll play the role of \(scenario.tutorRole). \(modeDescription)"
+            englishText: "Tap the button below to start a real-time conversation. I'll play the role of \(scenario.tutorRole)."
         )
         messages.append(greeting)
     }
 
     // MARK: - Recording
 
-    /// Start recording (called on PTT press or tap to start in Advanced mode)
+    /// Start recording (tap to start)
     func startRecording() {
         guard !isLocked else { return }
-
-        if mode == .advanced {
-            startAdvancedModeRecording()
-        } else {
-            startBeginnerModeRecording()
-        }
+        startAdvancedModeRecording()
     }
 
-    /// Stop recording and send to API (called on PTT release or tap to stop in Advanced mode)
+    /// Stop recording (tap to stop)
     func stopRecordingAndSend() {
-        if mode == .advanced {
-            stopAdvancedModeRecording()
-        } else {
-            stopBeginnerModeRecording()
-        }
+        stopAdvancedModeRecording()
     }
 
     // MARK: - Beginner Mode (Push-to-Talk)
@@ -244,11 +216,11 @@ final class ConversationViewModel: ObservableObject {
         }
     }
 
-    // MARK: - Advanced Mode Controls (Pause/Resume/Stop)
+    // MARK: - Conversation Controls (Pause/Resume/Stop)
 
     /// Pause the conversation - stops listening but keeps connection alive
     func pauseConversation() {
-        guard mode == .advanced, conversationState == .active else { return }
+        guard conversationState == .active else { return }
         guard let realtimeEngine = conversationEngine as? RealtimeEngine else { return }
 
         realtimeEngine.pause()  // Use pause() instead of stopStreaming() to prevent auto-resume
@@ -268,7 +240,7 @@ final class ConversationViewModel: ObservableObject {
 
     /// Resume the conversation - starts listening again
     func resumeConversation() {
-        guard mode == .advanced, conversationState == .paused else { return }
+        guard conversationState == .paused else { return }
         guard let realtimeEngine = conversationEngine as? RealtimeEngine else { return }
 
         realtimeEngine.unpause()  // Clear the pause flag first
@@ -287,7 +259,6 @@ final class ConversationViewModel: ObservableObject {
 
     /// Stop the conversation completely - disconnects and resets
     func stopConversation() {
-        guard mode == .advanced else { return }
         guard let realtimeEngine = conversationEngine as? RealtimeEngine else { return }
 
         // Stop streaming if active
@@ -337,7 +308,8 @@ final class ConversationViewModel: ObservableObject {
                     spanish: response.tutorResponse.tutorSpanish,
                     english: response.tutorResponse.tutorEnglish,
                     correction: response.tutorResponse.correctionSpanish,
-                    correctionEnglish: response.tutorResponse.correctionEnglish
+                    correctionEnglish: response.tutorResponse.correctionEnglish,
+                    correctionExplanation: response.tutorResponse.correctionExplanation
                 )
                 messages.append(tutorMessage)
 
@@ -351,6 +323,7 @@ final class ConversationViewModel: ObservableObject {
                         original: response.userTranscript,
                         corrected: correction,
                         english: response.tutorResponse.correctionEnglish,
+                        explanation: response.tutorResponse.correctionExplanation,
                         messageId: tutorMessage.id
                     )
                 }
@@ -403,7 +376,7 @@ final class ConversationViewModel: ObservableObject {
 
         let durationSeconds = Int(Date().timeIntervalSince(sessionStartDate))
         StreakManager.shared.recordSession(durationSeconds: durationSeconds)
-        print("[Session] Recorded session: \(turnCount) turns, \(durationSeconds)s duration")
+        print("[Session] Recorded session: \(turnCount) turns, \(durationSeconds)s, scenario: \(scenario.title)")
     }
 
     // MARK: - Cleanup
@@ -436,14 +409,15 @@ final class ConversationViewModel: ObservableObject {
     }
 
     /// Record a correction to SessionHistory (with deduplication)
-    private func recordCorrection(original: String, corrected: String, english: String?, messageId: UUID) {
-        guard !recordedMessageIds.contains(messageId) else { return }
-        // Don't insert here - correction shares ID with its message
+    private func recordCorrection(original: String, corrected: String, english: String?, explanation: String?, messageId: UUID) {
+        guard !recordedCorrectionIds.contains(messageId) else { return }
+        recordedCorrectionIds.insert(messageId)
 
         SessionHistory.shared.addCorrection(
             original: original,
             corrected: corrected,
             english: english,
+            explanation: explanation,
             scenario: scenario.title
         )
     }
@@ -482,7 +456,8 @@ extension ConversationViewModel: RealtimeEngineDelegate {
                     spanish: response.tutorResponse.tutorSpanish,
                     english: response.tutorResponse.tutorEnglish,
                     correction: response.tutorResponse.correctionSpanish,
-                    correctionEnglish: response.tutorResponse.correctionEnglish
+                    correctionEnglish: response.tutorResponse.correctionEnglish,
+                    correctionExplanation: response.tutorResponse.correctionExplanation
                 )
                 messages.append(tutorMessage)
 
@@ -496,6 +471,7 @@ extension ConversationViewModel: RealtimeEngineDelegate {
                         original: response.userTranscript,
                         corrected: correction,
                         english: response.tutorResponse.correctionEnglish,
+                        explanation: response.tutorResponse.correctionExplanation,
                         messageId: tutorMessage.id
                     )
                 }

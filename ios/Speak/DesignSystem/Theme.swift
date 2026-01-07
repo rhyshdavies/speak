@@ -252,6 +252,51 @@ struct LiveBadge: View {
     }
 }
 
+/// Practice limit badge showing daily allowance
+struct PracticeLimitBadge: View {
+    let tier: SubscriptionTier
+    let usedToday: Int
+
+    var body: some View {
+        HStack(spacing: Theme.Spacing.xs) {
+            Image(systemName: tier == .premium ? "infinity" : "clock")
+            Text(badgeText)
+        }
+        .font(Theme.Typography.caption)
+        .foregroundColor(Theme.Colors.textSecondary)
+    }
+
+    private var badgeText: String {
+        switch tier {
+        case .premium:
+            return "Unlimited"
+        case .free:
+            let remaining = max(0, 1 - usedToday)
+            return remaining > 0 ? "1 per day" : "Limit reached"
+        }
+    }
+}
+
+/// Lock overlay for premium-gated content
+struct LockedOverlay: View {
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.4)
+
+            VStack(spacing: Theme.Spacing.sm) {
+                Image(systemName: "lock.fill")
+                    .font(.title2)
+                    .foregroundColor(.white)
+
+                Text("Premium")
+                    .font(Theme.Typography.caption)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.white)
+            }
+        }
+    }
+}
+
 // MARK: - View Modifiers
 
 extension View {

@@ -3,8 +3,9 @@ import SwiftUI
 /// List of available scenarios in a 2-column grid
 struct ScenarioListView: View {
     let selectedLevel: CEFRLevel
-    let selectedMode: ConversationMode
+    var showPaywall: (PaywallTrigger) -> Void
 
+    @EnvironmentObject var subscriptionManager: SubscriptionManager
     @Environment(\.dismiss) private var dismiss
     @State private var selectedScenario: ScenarioContext?
 
@@ -31,12 +32,18 @@ struct ScenarioListView: View {
                     // Scenario Grid
                     LazyVGrid(columns: columns, spacing: 16) {
                         ForEach(availableScenarios) { scenario in
+                            let isLocked = scenario.type.minimumLevel.requiresPremium && subscriptionManager.tier == .free
                             ScenarioGridCard(
                                 scenario: scenario,
-                                level: selectedLevel
+                                level: selectedLevel,
+                                isLocked: isLocked
                             ) {
-                                HapticManager.mediumTap()
-                                selectedScenario = scenario
+                                if isLocked {
+                                    showPaywall(.levelLocked)
+                                } else {
+                                    HapticManager.mediumTap()
+                                    selectedScenario = scenario
+                                }
                             }
                         }
                     }
@@ -74,8 +81,7 @@ struct ScenarioListView: View {
             if let scenario = selectedScenario {
                 ConversationView(
                     scenario: scenario,
-                    cefrLevel: selectedLevel,
-                    mode: selectedMode
+                    cefrLevel: selectedLevel
                 )
             }
         }
@@ -88,21 +94,7 @@ struct ScenarioListView: View {
             // Level and Mode badges
             HStack(spacing: Theme.Spacing.md) {
                 LevelBadge(level: selectedLevel)
-
-                if selectedMode == .advanced {
-                    LiveBadge()
-                } else {
-                    HStack(spacing: Theme.Spacing.xs) {
-                        Image(systemName: selectedMode.icon)
-                        Text(selectedMode.displayName)
-                    }
-                    .font(Theme.Typography.caption)
-                    .foregroundColor(Theme.Colors.textSecondary)
-                    .padding(.horizontal, Theme.Spacing.sm)
-                    .padding(.vertical, Theme.Spacing.xs)
-                    .background(Theme.Colors.surfaceSecondary)
-                    .clipShape(Capsule())
-                }
+                LiveBadge()
             }
 
             // Scenario count
@@ -120,53 +112,69 @@ struct ScenarioListView: View {
 struct ScenarioGridCard: View {
     let scenario: ScenarioContext
     let level: CEFRLevel
+    var isLocked: Bool = false
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            VStack(alignment: .leading, spacing: 0) {
-                // Top section with gradient background
-                ZStack(alignment: .bottomLeading) {
-                    // Background gradient
-                    LinearGradient(
-                        colors: [
-                            scenarioColor.opacity(0.3),
-                            scenarioColor.opacity(0.1)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
+            ZStack {
+                VStack(alignment: .leading, spacing: 0) {
+                    // Top section with gradient background
+                    ZStack(alignment: .bottomLeading) {
+                        // Background gradient
+                        LinearGradient(
+                            colors: [
+                                scenarioColor.opacity(0.3),
+                                scenarioColor.opacity(0.1)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
 
-                    // Icon
-                    VStack {
-                        Spacer()
-                        HStack {
-                            Image(systemName: scenario.type.icon)
-                                .font(.system(size: 32))
-                                .foregroundColor(scenarioColor)
+                        // Icon
+                        VStack {
                             Spacer()
+                            HStack {
+                                Image(systemName: scenario.type.icon)
+                                    .font(.system(size: 32))
+                                    .foregroundColor(scenarioColor)
+                                Spacer()
+                            }
+                            .padding(Theme.Spacing.md)
                         }
-                        .padding(Theme.Spacing.md)
                     }
-                }
-                .frame(height: 100)
+                    .frame(height: 100)
 
-                // Bottom section with title and level
-                VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-                    Text(scenario.title)
-                        .font(Theme.Typography.headline)
-                        .foregroundColor(Theme.Colors.textPrimary)
-                        .lineLimit(2)
-                        .multilineTextAlignment(.leading)
+                    // Bottom section with title and level
+                    VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+                        Text(scenario.title)
+                            .font(Theme.Typography.headline)
+                            .foregroundColor(Theme.Colors.textPrimary)
+                            .lineLimit(2)
+                            .multilineTextAlignment(.leading)
 
-                    // Level indicator
-                    Text(scenario.type.minimumLevel.rawValue)
-                        .font(Theme.Typography.caption)
-                        .foregroundColor(Theme.Colors.textSecondary)
+                        // Level indicator
+                        HStack(spacing: Theme.Spacing.xs) {
+                            Text(scenario.type.minimumLevel.rawValue)
+                                .font(Theme.Typography.caption)
+                                .foregroundColor(Theme.Colors.textSecondary)
+
+                            if isLocked {
+                                Image(systemName: "lock.fill")
+                                    .font(Theme.Typography.caption)
+                                    .foregroundColor(Theme.Colors.textSecondary)
+                            }
+                        }
+                    }
+                    .padding(Theme.Spacing.md)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Theme.Colors.surface)
                 }
-                .padding(Theme.Spacing.md)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Theme.Colors.surface)
+
+                // Lock overlay
+                if isLocked {
+                    LockedOverlay()
+                }
             }
             .clipShape(RoundedRectangle(cornerRadius: Theme.CornerRadius.card))
             .shadow(
@@ -203,6 +211,10 @@ struct ScenarioGridCard: View {
 
 #Preview {
     NavigationStack {
-        ScenarioListView(selectedLevel: .b1, selectedMode: .beginner)
+        ScenarioListView(
+            selectedLevel: .b1,
+            showPaywall: { _ in }
+        )
+        .environmentObject(SubscriptionManager.shared)
     }
 }

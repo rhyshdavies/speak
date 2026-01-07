@@ -43,4 +43,14 @@ enum CEFRLevel: String, Codable, CaseIterable, Identifiable {
         case .c2: return "6.circle.fill"
         }
     }
+
+    /// B2+ levels require premium subscription
+    var requiresPremium: Bool {
+        switch self {
+        case .a1, .a2, .b1:
+            return false
+        case .b2, .c1, .c2:
+            return true
+        }
+    }
 }

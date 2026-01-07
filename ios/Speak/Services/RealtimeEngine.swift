@@ -42,6 +42,9 @@ final class RealtimeEngine: NSObject, ConversationEngine {
     private var currentTranscript = ""
     private var tutorSpanishText = ""
     private var tutorEnglishText = ""
+    private var correctionSpanish: String? = nil
+    private var correctionEnglish: String? = nil
+    private var correctionExplanation: String? = nil
     private var suggestedResponses: [String]? = nil
     private var audioChunks: [Data] = []  // Still accumulate for final response
     private var responseCompletion: ((Result<TurnResponse, Error>) -> Void)?
@@ -64,6 +67,16 @@ final class RealtimeEngine: NSObject, ConversationEngine {
     // MARK: - Connection Management
 
     func connect(scenario: ScenarioContext, cefrLevel: CEFRLevel) async throws {
+        // Guard against double-connection - if already connected or connecting, just return
+        if isConnected {
+            print("[RealtimeEngine] Already connected, skipping")
+            return
+        }
+        if connectionContinuation != nil {
+            print("[RealtimeEngine] Connection already in progress, skipping")
+            return
+        }
+
         self.scenario = scenario
         self.cefrLevel = cefrLevel
 
@@ -181,6 +194,9 @@ final class RealtimeEngine: NSObject, ConversationEngine {
         currentTranscript = ""
         tutorSpanishText = ""
         tutorEnglishText = ""
+        correctionSpanish = nil
+        correctionEnglish = nil
+        correctionExplanation = nil
         suggestedResponses = nil
         audioChunks = []
         pendingBufferCount = 0
@@ -334,6 +350,9 @@ final class RealtimeEngine: NSObject, ConversationEngine {
         currentTranscript = ""
         tutorSpanishText = ""
         tutorEnglishText = ""
+        correctionSpanish = nil
+        correctionEnglish = nil
+        correctionExplanation = nil
         suggestedResponses = nil
         audioChunks = []
         isWaitingForResponse = true
@@ -438,7 +457,11 @@ final class RealtimeEngine: NSObject, ConversationEngine {
             if let response = json["response"] as? [String: Any] {
                 tutorSpanishText = response["tutorSpanish"] as? String ?? tutorSpanishText
                 tutorEnglishText = response["tutorEnglish"] as? String ?? ""
+                correctionSpanish = response["correctionSpanish"] as? String
+                correctionEnglish = response["correctionEnglish"] as? String
+                correctionExplanation = response["correctionExplanation"] as? String
                 suggestedResponses = response["suggestedResponses"] as? [String]
+                print("[RealtimeEngine] Parsed response - correction: \(correctionSpanish ?? "none")")
             }
 
         case "audio":
@@ -504,6 +527,9 @@ final class RealtimeEngine: NSObject, ConversationEngine {
             currentTranscript = ""
             tutorSpanishText = ""
             tutorEnglishText = ""
+            correctionSpanish = nil
+            correctionEnglish = nil
+            correctionExplanation = nil
             suggestedResponses = nil
             audioChunks = []
             // If no audio was streamed, resume mic immediately
@@ -527,8 +553,9 @@ final class RealtimeEngine: NSObject, ConversationEngine {
         let tutorResponse = TutorResponseJSON(
             tutorSpanish: tutorSpanishText,
             tutorEnglish: tutorEnglishText,
-            correctionSpanish: nil,
-            correctionEnglish: nil,
+            correctionSpanish: correctionSpanish,
+            correctionEnglish: correctionEnglish,
+            correctionExplanation: correctionExplanation,
             hint: nil,
             vocabularySpotlight: nil,
             scenarioProgress: .middle,
@@ -558,6 +585,9 @@ final class RealtimeEngine: NSObject, ConversationEngine {
         currentTranscript = ""
         tutorSpanishText = ""
         tutorEnglishText = ""
+        correctionSpanish = nil
+        correctionEnglish = nil
+        correctionExplanation = nil
         suggestedResponses = nil
         audioChunks = []
     }

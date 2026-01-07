@@ -12,6 +12,7 @@ struct ConversationView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var showKeyPhrases: Bool = false
     @State private var showPaywall: Bool = false
+    @State private var globalShowTranslations: Bool = false
 
     init(scenario: ScenarioContext, cefrLevel: CEFRLevel, language: Language = .spanish) {
         self.scenario = scenario
@@ -80,6 +81,22 @@ struct ConversationView: View {
 
             ToolbarItem(placement: .navigationBarTrailing) {
                 HStack(spacing: Theme.Spacing.md) {
+                    // Global English toggle
+                    Button {
+                        HapticManager.selection()
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                            globalShowTranslations.toggle()
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: globalShowTranslations ? "text.bubble.fill" : "text.bubble")
+                                .font(.body)
+                            Text("EN")
+                                .font(.caption.weight(.semibold))
+                        }
+                        .foregroundColor(globalShowTranslations ? Theme.Colors.primary : Theme.Colors.textSecondary)
+                    }
+
                     // Key Phrases button
                     Button {
                         HapticManager.selection()
@@ -453,6 +470,7 @@ struct ConversationView: View {
         MessageBubble(
             message: message,
             showTranslation: viewModel.showTranslations,
+            forceShowTranslation: globalShowTranslations,
             tier: subscriptionManager.tier,
             onPaywallTrigger: { showPaywall = true },
             onSavePhrase: { sp, en in

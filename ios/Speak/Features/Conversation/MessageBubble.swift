@@ -4,12 +4,18 @@ import SwiftUI
 struct MessageBubble: View {
     let message: ChatMessage
     var showTranslation: Bool = true
+    var forceShowTranslation: Bool = false  // Global toggle to show all translations
     var tier: SubscriptionTier = .free
     var onPaywallTrigger: (() -> Void)?
     var onSavePhrase: ((String, String) -> Void)?
     var isSaved: Bool = false
 
     @State private var isTranslationExpanded: Bool = false
+
+    /// Whether translation should be visible (either forced globally or expanded locally)
+    private var shouldShowTranslation: Bool {
+        forceShowTranslation || isTranslationExpanded
+    }
     @State private var showExplanationSheet: Bool = false
 
     private var isUser: Bool {
@@ -87,21 +93,24 @@ struct MessageBubble: View {
 
     private func translationDisclosure(english: String) -> some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-            Button {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    isTranslationExpanded.toggle()
+            // Only show toggle button if not globally forced
+            if !forceShowTranslation {
+                Button {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        isTranslationExpanded.toggle()
+                    }
+                } label: {
+                    HStack(spacing: Theme.Spacing.xs) {
+                        Image(systemName: shouldShowTranslation ? "chevron.down" : "chevron.right")
+                            .font(.caption2)
+                        Text(shouldShowTranslation ? "Hide English" : "Show English")
+                            .font(Theme.Typography.caption)
+                    }
+                    .foregroundColor(Theme.Colors.textTertiary)
                 }
-            } label: {
-                HStack(spacing: Theme.Spacing.xs) {
-                    Image(systemName: isTranslationExpanded ? "chevron.down" : "chevron.right")
-                        .font(.caption2)
-                    Text(isTranslationExpanded ? "Hide English" : "Show English")
-                        .font(Theme.Typography.caption)
-                }
-                .foregroundColor(Theme.Colors.textTertiary)
             }
 
-            if isTranslationExpanded {
+            if shouldShowTranslation {
                 Text(english)
                     .font(Theme.Typography.subheadline)
                     .foregroundColor(Theme.Colors.textSecondary)

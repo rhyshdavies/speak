@@ -9,18 +9,9 @@ const ELEVENLABS_API_KEY = process.env.ELEVEN_LABS_API_KEY!;
 const GROQ_API_KEY = process.env.GROQ_API_KEY!;
 const CARTESIA_API_KEY = process.env.CARTESIA_API_KEY!;
 
-// Voice IDs for each language (Cartesia Sonic-3)
-const CARTESIA_VOICE_IDS: Record<Language, string> = {
-  es: 'c0c374aa-09be-42d9-9828-4d2d7df86962', // Spanish female
-  fr: '8e24a5c8-df2f-4d15-8c95-72a8e8b1ce93', // French female
-  de: '8e24a5c8-df2f-4d15-8c95-72a8e8b1ce93', // German (fallback to multilingual)
-  it: '8e24a5c8-df2f-4d15-8c95-72a8e8b1ce93', // Italian (fallback to multilingual)
-  pt: '8e24a5c8-df2f-4d15-8c95-72a8e8b1ce93', // Portuguese (fallback to multilingual)
-  ja: '8e24a5c8-df2f-4d15-8c95-72a8e8b1ce93', // Japanese (fallback to multilingual)
-  ko: '8e24a5c8-df2f-4d15-8c95-72a8e8b1ce93', // Korean (fallback to multilingual)
-  zh: '8e24a5c8-df2f-4d15-8c95-72a8e8b1ce93', // Mandarin (fallback to multilingual)
-  ar: '8e24a5c8-df2f-4d15-8c95-72a8e8b1ce93', // Arabic (fallback to multilingual)
-};
+// Cartesia Sonic-3 multilingual voice - same voice works for all languages
+// Just specify the language parameter in the request
+const CARTESIA_MULTILINGUAL_VOICE_ID = 'c0c374aa-09be-42d9-9828-4d2d7df86962';
 
 interface SessionState {
   isPaused: boolean;
@@ -194,7 +185,7 @@ export class RealtimeServer {
           transcript: text,
           voice: {
             mode: 'id',
-            id: CARTESIA_VOICE_IDS[state.language] || CARTESIA_VOICE_IDS.es,
+            id: CARTESIA_MULTILINGUAL_VOICE_ID,
           },
           language: state.language,
           output_format: {

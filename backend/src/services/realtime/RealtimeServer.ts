@@ -340,15 +340,17 @@ export class RealtimeServer {
           try {
             const parsed = JSON.parse(jsonBuffer.trim());
             englishText = parsed.tutorEnglish || '';
+            // Support both old (correctionSpanish) and new (correctionTarget) field names
+            const correction = parsed.correctionTarget || parsed.correctionSpanish || null;
             response = {
               tutorSpanish: fullResponse,
               tutorEnglish: englishText,
-              correctionSpanish: parsed.correctionSpanish || null,
+              correctionSpanish: correction,
               correctionEnglish: parsed.correctionEnglish || null,
               correctionExplanation: parsed.correctionExplanation || null,
-              suggestedResponses: parsed.suggestedResponses || ['Sí', 'No', '¿Por qué?'],
+              suggestedResponses: parsed.suggestedResponses || defaultResponses,
             };
-            console.log(`[Realtime] Parsed JSON - English: "${englishText}"${parsed.correctionExplanation ? ', has explanation' : ''}`);
+            console.log(`[Realtime] Parsed JSON - English: "${englishText}"${correction ? `, correction: "${correction}"` : ''}${parsed.correctionExplanation ? ', has explanation' : ''}`);
           } catch (parseError) {
             // Try to extract English with regex
             const englishMatch = jsonBuffer.match(/"tutorEnglish"\s*:\s*"((?:[^"\\]|\\.)*)"/);
